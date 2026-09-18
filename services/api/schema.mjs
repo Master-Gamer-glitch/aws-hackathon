@@ -10,7 +10,8 @@ export const TABLES = {
   ROOMS: 'crewdesk-rooms',
   WALLET: 'crewdesk-wallet',
   CHECKPOINTS: 'crewdesk-checkpoints',
-  AUDIT_LOG: 'crewdesk-audit-log'
+  AUDIT_LOG: 'crewdesk-audit-log',
+  CONNECTIONS: 'crewdesk-connections'
 };
 
 export const tableDefinitions = [
@@ -77,6 +78,12 @@ export const tableDefinitions = [
     partitionKey: { name: 'projectId', type: 'S' },
     sortKey: { name: 'sk', type: 'S' }, // ts#{timestamp}##{eventId}
     ttl: 'expiresAt' // 30 days
+  },
+  {
+    name: TABLES.CONNECTIONS,
+    partitionKey: { name: 'projectId', type: 'S' },
+    sortKey: { name: 'connectionId', type: 'S' },
+    ttl: 'expiresAt' // WebSocket connection expires after disconnect
   }
 ];
 
