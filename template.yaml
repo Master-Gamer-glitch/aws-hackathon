@@ -1,0 +1,304 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2013-12-31
+Description: 'CrewDesk Backend - Distributed Task Execution with Agent Orchestration'
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 512
+    Runtime: nodejs20.x
+    Environment:
+      Variables:
+        DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+        AWS_REGION: !Ref AWS::Region
+
+Conditions:
+  IsLocal: !Equals [!Ref Environment, 'local']
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod, local]
+
+Resources:
+  # ============================================================================
+  # DynamoDB Tables
+  # ============================================================================
+
+  TasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-tasks
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: projectId
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+        - AttributeName: state
+          AttributeType: S
+        - AttributeName: leaseOwner
+          AttributeType: S
+        - AttributeName: leaseExpiry
+          AttributeType: N
+      KeySchema:
+        - AttributeName: projectId
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: StateIndex
+          KeySchema:
+            - AttributeName: state
+              KeyType: HASH
+            - AttributeName: sk
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: DeviceIndex
+          KeySchema:
+            - AttributeName: leaseOwner
+              KeyType: HASH
+            - AttributeName: leaseExpiry
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  ProjectsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-projects
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: projectId
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: projectId
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  DevicesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-devices
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: deviceId
+          AttributeType: S
+        - AttributeName: roomId
+          AttributeType: S
+        - AttributeName: lastHeartbeat
+          AttributeType: N
+      KeySchema:
+        - AttributeName: deviceId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: RoomIndex
+          KeySchema:
+            - AttributeName: roomId
+              KeyType: HASH
+            - AttributeName: lastHeartbeat
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  CheckpointsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-checkpoints
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: projectId
+          AttributeType: S
+        - AttributeName: checkpointId
+          AttributeType: S
+        - AttributeName: taskId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: projectId
+          KeyType: HASH
+        - AttributeName: checkpointId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: TaskIndex
+          KeySchema:
+            - AttributeName: taskId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  # ============================================================================
+  # Lambda Functions
+  # ============================================================================
+
+  ClaimTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-claim-task
+      CodeUri: services/api/handlers/tasks/
+      Handler: claim.claimTaskHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTable
+
+  SubmitTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-submit-task
+      CodeUri: services/api/handlers/tasks/
+      Handler: submit.submitTaskHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTable
+
+  LeadAgentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-lead-agent
+      CodeUri: services/api/handlers/agents/
+      Handler: lead.leadAgentHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProjectsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+
+  SweepFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-sweep
+      CodeUri: services/api/handlers/events/
+      Handler: sweep.sweepHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTable
+
+  # ============================================================================
+  # API Gateway
+  # ============================================================================
+
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Auth:
+        DefaultAuthorizer: LambdaAuthorizer
+        Authorizers:
+          LambdaAuthorizer:
+            UserPoolArn: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/us-east-1_XXXXXXX'
+            Identity:
+              ReauthorizeEvery: 300
+
+  # Claim endpoint
+  ClaimTaskResource:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+
+  # Lead agent endpoint
+  LeadAgentResource:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+
+  # ============================================================================
+  # EventBridge Rule for Sweep
+  # ============================================================================
+
+  SweepScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(15 seconds)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SweepFunction.Arn
+          RoleArn: !GetAtt EventBridgeRole.Arn
+
+  SweepLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SweepFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt SweepScheduleRule.Arn
+
+  # ============================================================================
+  # IAM Roles
+  # ============================================================================
+
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt SweepFunction.Arn
+
+  # ============================================================================
+  # Outputs
+  # ============================================================================
+
+Outputs:
+  TasksTableName:
+    Value: !Ref TasksTable
+    Description: Tasks DynamoDB table name
+
+  ProjectsTableName:
+    Value: !Ref ProjectsTable
+    Description: Projects DynamoDB table name
+
+  ClaimTaskFunctionArn:
+    Value: !GetAtt ClaimTaskFunction.Arn
+    Description: Claim task Lambda ARN
+
+  SubmitTaskFunctionArn:
+    Value: !GetAtt SubmitTaskFunction.Arn
+    Description: Submit task Lambda ARN
+
+  LeadAgentFunctionArn:
+    Value: !GetAtt LeadAgentFunction.Arn
+    Description: Lead agent Lambda ARN
