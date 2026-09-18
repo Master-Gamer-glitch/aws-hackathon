@@ -1,7 +1,7 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 const bedrock = new BedrockRuntimeClient({});
-const MODEL_ID = 'anthropic.claude-opus-5-sonnet-20241022';
+const MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-haiku-4-5-20251001-v1:0';
 
 export async function invokeModel(prompt, maxTokens = 2048) {
   const command = new InvokeModelCommand({
@@ -9,7 +9,7 @@ export async function invokeModel(prompt, maxTokens = 2048) {
     contentType: 'application/json',
     accept: 'application/json',
     body: JSON.stringify({
-      anthropic_version: 'bedrock-2023-06-01',
+      anthropic_version: 'bedrock-2023-05-31',
       max_tokens: maxTokens,
       messages: [
         {

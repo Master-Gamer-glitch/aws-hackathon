@@ -23,8 +23,11 @@ export async function claimTaskHandler(event) {
 
   try {
     // 1. Extract projectId from composite key (proj_123#TASK#task_456)
-    const [projectId, _, actualTaskId] = taskId.includes('#')
-      ? taskId.split('#')
+    // API Gateway may pass %23 literally, so decode first
+    let decodedId;
+    try { decodedId = decodeURIComponent(taskId); } catch { decodedId = taskId; }
+    const [projectId, _, actualTaskId] = decodedId.includes('#')
+      ? decodedId.split('#')
       : [taskId.split('_')[0] + '_' + taskId.split('_')[1], 'TASK', taskId];
 
     // 2. Fetch task

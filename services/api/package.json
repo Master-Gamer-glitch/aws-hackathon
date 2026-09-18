@@ -16,9 +16,5 @@
     "@aws-sdk/client-bedrock-runtime": "^3.300.0",
     "@aws-sdk/client-s3": "^3.300.0",
     "@aws-sdk/client-apigatewaymanagementapi": "^3.300.0"
-  },
-  "devDependencies": {
-    "aws-cdk-lib": "^2.100.0",
-    "constructs": "^10.0.0"
   }
 }

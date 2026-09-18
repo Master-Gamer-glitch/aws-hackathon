@@ -17,7 +17,8 @@ export async function sweepHandler(event) {
     const leased = await db.scanTable(
       TABLES.TASKS,
       '#state = :leased',
-      { ':leased': 'leased' }
+      { ':leased': 'leased' },
+      { '#state': 'state' }
     );
 
     const results = {
@@ -68,11 +69,10 @@ export async function sweepHandler(event) {
           await db.updateItem(
             TABLES.TASKS,
             { projectId: task.projectId, sk: task.sk },
-            'SET #state = :ready, leaseOwner = :null, leaseEpoch = :epoch, attempts = :att',
+            'SET #state = :ready, leaseEpoch = :epoch, attempts = :att REMOVE leaseOwner',
             { '#state': 'state' },
             {
               ':ready': 'ready',
-              ':null': null,
               ':epoch': (task.leaseEpoch || 0) + 1,
               ':att': attempts
             }

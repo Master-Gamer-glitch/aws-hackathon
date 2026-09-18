@@ -27,8 +27,12 @@ const validateContract = (task) => {
 };
 
 export async function leadAgentHandler(event) {
-  const { projectId } = event.pathParameters;
-  const { outcome, deadline, captureId } = JSON.parse(event.body);
+  const body = JSON.parse(event.body);
+  const projectId = event.pathParameters?.projectId || body.projectId;
+  const { outcome, deadline, captureId } = body;
+  if (!projectId) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'projectId required in path or body' }) };
+  }
   const now = Date.now();
 
   try {
@@ -171,9 +175,13 @@ Output valid JSON:
     };
   } catch (err) {
     console.error('Lead agent error:', err);
+    const bedrockBlocked = /not allowed|invalid.*model|access|ValidationException/i.test(err.message || '');
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message })
+      statusCode: bedrockBlocked ? 502 : 500,
+      body: JSON.stringify({
+        error: err.message,
+        ...(bedrockBlocked ? { hint: 'Bedrock model access not enabled. In AWS console: Bedrock → Model access → enable a Claude/Haiku model, then retry.' } : {})
+      })
     };
   }
 }

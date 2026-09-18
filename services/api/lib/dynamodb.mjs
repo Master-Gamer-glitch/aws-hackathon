@@ -1,7 +1,19 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
-const client = new DynamoDBClient({});
+const clientConfig = {
+  region: process.env.AWS_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1',
+};
+
+if (process.env.DYNAMODB_ENDPOINT) {
+  clientConfig.endpoint = process.env.DYNAMODB_ENDPOINT;
+  clientConfig.credentials = {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
+  };
+}
+
+const client = new DynamoDBClient(clientConfig);
 const doc = DynamoDBDocumentClient.from(client);
 
 export async function getItem(TableName, Key) {
@@ -43,10 +55,11 @@ export async function updateItem(TableName, Key, UpdateExpression, ExpressionAtt
   }
 }
 
-export async function scanTable(TableName, FilterExpression = null, ExpressionAttributeValues = {}) {
+export async function scanTable(TableName, FilterExpression = null, ExpressionAttributeValues = {}, ExpressionAttributeNames = {}) {
   const params = {
     TableName,
     ExpressionAttributeValues: Object.keys(ExpressionAttributeValues).length > 0 ? ExpressionAttributeValues : undefined,
+    ExpressionAttributeNames: Object.keys(ExpressionAttributeNames).length > 0 ? ExpressionAttributeNames : undefined,
     FilterExpression
   };
 

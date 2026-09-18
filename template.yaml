@@ -6,11 +6,13 @@ Globals:
   Function:
     Timeout: 60
     MemorySize: 512
-    Runtime: nodejs20.x
+    Runtime: nodejs22.x
+    Architectures:
+      - arm64
     Environment:
       Variables:
         DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
-        AWS_REGION: !Ref AWS::Region
+        APP_REGION: !Ref AWS::Region
 
 Conditions:
   IsLocal: !Equals [!Ref Environment, 'local']
@@ -172,34 +174,56 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: crewdesk-claim-task
-      CodeUri: services/api/handlers/tasks/
-      Handler: claim.claimTaskHandler
+      CodeUri: services/api/
+      Handler: handlers/tasks/claim.claimTaskHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
       Environment:
         Variables:
           TASKS_TABLE: !Ref TasksTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Events:
+        ClaimTask:
+          Type: Api
+          Properties:
+            Path: /tasks/{taskId}/claim
+            Method: post
 
   SubmitTaskFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: crewdesk-submit-task
-      CodeUri: services/api/handlers/tasks/
-      Handler: submit.submitTaskHandler
+      CodeUri: services/api/
+      Handler: handlers/tasks/submit.submitTaskHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
       Environment:
         Variables:
           TASKS_TABLE: !Ref TasksTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Events:
+        SubmitTask:
+          Type: Api
+          Properties:
+            Path: /tasks/{taskId}/submit
+            Method: post
 
   LeadAgentFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: crewdesk-lead-agent
-      CodeUri: services/api/handlers/agents/
-      Handler: lead.leadAgentHandler
+      CodeUri: services/api/
+      Handler: handlers/agents/lead.leadAgentHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
@@ -211,26 +235,45 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTable
+          PROJECTS_TABLE: !Ref ProjectsTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        LeadAgent:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/outcomes
+            Method: post
 
   SweepFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: crewdesk-sweep
-      CodeUri: services/api/handlers/events/
-      Handler: sweep.sweepHandler
+      CodeUri: services/api/
+      Handler: handlers/events/sweep.sweepHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
       Environment:
         Variables:
           TASKS_TABLE: !Ref TasksTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Events:
+        SweepManual:
+          Type: Api
+          Properties:
+            Path: /sweep
+            Method: post
 
   WebSocketConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: crewdesk-websocket-connect
-      CodeUri: services/api/handlers/websocket/
-      Handler: connect.connectHandler
+      CodeUri: services/api/
+      Handler: handlers/websocket/connect.connectHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ConnectionsTable
@@ -242,8 +285,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: crewdesk-websocket-disconnect
-      CodeUri: services/api/handlers/websocket/
-      Handler: disconnect.disconnectHandler
+      CodeUri: services/api/
+      Handler: handlers/websocket/disconnect.disconnectHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ConnectionsTable
@@ -251,33 +294,6 @@ Resources:
         Variables:
           CONNECTIONS_TABLE: !Ref ConnectionsTable
 
-  # ============================================================================
-  # API Gateway
-  # ============================================================================
-
-  ApiGateway:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: !Ref Environment
-      Auth:
-        DefaultAuthorizer: LambdaAuthorizer
-        Authorizers:
-          LambdaAuthorizer:
-            UserPoolArn: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/us-east-1_XXXXXXX'
-            Identity:
-              ReauthorizeEvery: 300
-
-  # Claim endpoint
-  ClaimTaskResource:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: !Ref Environment
-
-  # Lead agent endpoint
-  LeadAgentResource:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: !Ref Environment
 
   # ============================================================================
   # EventBridge Rule for Sweep
@@ -286,10 +302,11 @@ Resources:
   SweepScheduleRule:
     Type: AWS::Events::Rule
     Properties:
-      ScheduleExpression: rate(15 seconds)
+      ScheduleExpression: rate(1 minute)
       State: ENABLED
       Targets:
-        - Arn: !GetAtt SweepFunction.Arn
+        - Id: SweepFunctionTarget
+          Arn: !GetAtt SweepFunction.Arn
           RoleArn: !GetAtt EventBridgeRole.Arn
 
   SweepLambdaPermission:
@@ -332,13 +349,13 @@ Resources:
     Properties:
       Name: CrewDesk WebSocket
       ProtocolType: WEBSOCKET
-      RouteSelectionExpression: \$default
+      RouteSelectionExpression: $request.body.action
 
   WebSocketConnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref WebSocketApi
-      RouteKey: \$connect
+      RouteKey: $connect
       Target: !Sub 'integrations/${WebSocketConnectIntegration}'
 
   WebSocketConnectIntegration:
@@ -346,13 +363,13 @@ Resources:
     Properties:
       ApiId: !Ref WebSocketApi
       IntegrationType: AWS_PROXY
-      IntegrationUri: !Sub 'arn:aws:apigatewayv2:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketConnectFunction.Arn}/invocations'
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketConnectFunction.Arn}/invocations'
 
   WebSocketDisconnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref WebSocketApi
-      RouteKey: \$disconnect
+      RouteKey: $disconnect
       Target: !Sub 'integrations/${WebSocketDisconnectIntegration}'
 
   WebSocketDisconnectIntegration:
@@ -360,7 +377,7 @@ Resources:
     Properties:
       ApiId: !Ref WebSocketApi
       IntegrationType: AWS_PROXY
-      IntegrationUri: !Sub 'arn:aws:apigatewayv2:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketDisconnectFunction.Arn}/invocations'
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketDisconnectFunction.Arn}/invocations'
 
   WebSocketDeployment:
     Type: AWS::ApiGatewayV2::Deployment
