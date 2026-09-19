@@ -668,12 +668,111 @@
             }
         }
 
-        function joinAirstream() {
-            const roomId = prompt('Enter room ID (or leave empty for auto):');
-            if (roomId !== null) {
-                addMessage(`🌐 Joining Airstream${roomId ? ` room: ${roomId}` : '...'}`, false);
-                // TODO: implement Airstream WebSocket connection
+        // Airstream event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            joinBtn?.addEventListener('click', () => {
+                const menu = document.createElement('div');
+                menu.innerHTML = `
+                    <div style="position: absolute; top: 60px; right: 10px; background: #2a2a2a; border: 1px solid #444; border-radius: 8px; padding: 12px; z-index: 1000; min-width: 200px;">
+                        <button onclick="createRoom()" style="display: block; width: 100%; padding: 10px; margin-bottom: 8px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            ➕ Create Room
+                        </button>
+                        <button onclick="promptJoinRoom()" style="display: block; width: 100%; padding: 10px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            🔗 Join Room
+                        </button>
+                    </div>
+                `;
+                document.body.appendChild(menu);
+                setTimeout(() => menu.remove(), 3000);
+            });
+        });
+
+        async function createRoom() {
+            try {
+                addEvent('📡 Creating Airstream room...', 'system');
+                const response = await fetch(`${API_BASE_URL}/projects/${projectId}/rooms`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: 'master_' + Date.now(),
+                        deviceName: 'Master Device'
+                    })
+                });
+
+                if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+                const data = await response.json();
+                const roomId = data.roomId;
+
+                addEvent(`✅ Room created: ${roomId}`, 'system');
+                addMessage(`🚀 Airstream room created!\n\nRoom ID: ${roomId}\n\nShare this ID with other devices to join.`, false);
+
+                // Store room ID in URL hash
+                window.location.hash = `room=${roomId}`;
+
+            } catch (error) {
+                addEvent(`❌ Create room failed: ${error.message}`, 'error');
+                addMessage(`❌ Failed to create room: ${error.message}`, false);
             }
+        }
+
+        async function joinRoom(roomId) {
+            try {
+                addEvent(`🌐 Joining room: ${roomId}...`, 'system');
+                const response = await fetch(`${API_BASE_URL}/projects/${projectId}/rooms/${roomId}/devices`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: 'slave_' + Date.now(),
+                        deviceName: 'Slave Device'
+                    })
+                });
+
+                if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+                const data = await response.json();
+
+                addEvent(`✅ Device joined: ${data.deviceId}`, 'device-event');
+                addMessage(`🌐 Joined room ${roomId}!\n\nCapabilities detected:\n${Object.entries(data.capabilities || {}).map(([k,v]) => `  • ${k}: ${v}`).join('\n')}`, false);
+
+                // Start heartbeat
+                startHeartbeat(roomId, data.deviceId);
+
+            } catch (error) {
+                addEvent(`❌ Join failed: ${error.message}`, 'error');
+                addMessage(`❌ Failed to join room: ${error.message}`, false);
+            }
+        }
+
+        function promptJoinRoom() {
+            // Check URL hash first
+            const hashRoom = new URLSearchParams(window.location.hash.slice(1)).get('room');
+            const roomId = prompt('Enter room ID to join:', hashRoom || '');
+            if (roomId) {
+                joinRoom(roomId);
+            }
+        }
+
+        let heartbeatInterval = null;
+        function startHeartbeat(roomId, deviceId) {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+
+            heartbeatInterval = setInterval(async () => {
+                try {
+                    await fetch(`${API_BASE_URL}/projects/${projectId}/rooms/${roomId}/devices/${deviceId}/heartbeat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            status: 'ok',
+                            metrics: {
+                                cpuUsage: Math.random() * 80,
+                                memUsage: Math.random() * 20 + 5,
+                                activeTaskCount: 0
+                            }
+                        })
+                    });
+                } catch (error) {
+                    console.error('Heartbeat error:', error);
+                }
+            }, 8000);
         }
 
         function updateUI() {
