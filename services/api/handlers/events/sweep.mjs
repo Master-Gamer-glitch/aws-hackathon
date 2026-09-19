@@ -9,6 +9,8 @@ import { db } from '../../lib/dynamodb.mjs';
 import broadcast from '../../lib/broadcast.mjs';
 import { TABLES } from '../../schema.mjs';
 
+const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*' };
+
 export async function sweepHandler(event) {
   const now = Date.now();
 
@@ -100,6 +102,7 @@ export async function sweepHandler(event) {
 
     return {
       statusCode: 200,
+      headers: CORS_HEADERS,
       body: JSON.stringify(results)
     };
   } catch (err) {
@@ -107,6 +110,7 @@ export async function sweepHandler(event) {
     // Don't fail - sweep should be resilient
     return {
       statusCode: 200,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ error: err.message })
     };
   }

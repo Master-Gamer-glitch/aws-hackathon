@@ -14,7 +14,7 @@ if ! docker ps | grep -q localstack; then
     --name localstack \
     -p 4566:4566 \
     -e SERVICES=dynamodb,s3,events \
-    localstack/localstack:latest
+    localstack/localstack:3
   sleep 3
 else
   echo "✅ LocalStack already running"

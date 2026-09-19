@@ -11,6 +11,8 @@ import broadcast from '../../lib/broadcast.mjs';
 import { invokeBedrockAgent } from '../../lib/bedrock.mjs';
 import { TABLES } from '../../schema.mjs';
 
+const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*' };
+
 export async function submitTaskHandler(event) {
   const { taskId } = event.pathParameters;
   const { deviceId, leaseEpoch, manifest } = JSON.parse(event.body);
@@ -30,7 +32,7 @@ export async function submitTaskHandler(event) {
     });
 
     if (!task) {
-      return { statusCode: 404, body: JSON.stringify({ error: 'task_not_found' }) };
+      return { statusCode: 404, headers: CORS_HEADERS, body: JSON.stringify({ error: 'task_not_found' }) };
     }
 
     // 2. FENCING CHECK: Only the current leaseEpoch can submit
@@ -38,6 +40,7 @@ export async function submitTaskHandler(event) {
     if (task.leaseEpoch !== leaseEpoch) {
       return {
         statusCode: 409,
+        headers: CORS_HEADERS,
         body: JSON.stringify({
           error: 'stale_submission',
           reason: 'Task was reassigned to another device',
@@ -165,6 +168,7 @@ export async function submitTaskHandler(event) {
 
     return {
       statusCode: 200,
+      headers: CORS_HEADERS,
       body: JSON.stringify({
         accepted: true,
         verifyResult: testerResult,
@@ -175,6 +179,7 @@ export async function submitTaskHandler(event) {
     console.error('Submit error:', err);
     return {
       statusCode: 500,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ error: err.message })
     };
   }

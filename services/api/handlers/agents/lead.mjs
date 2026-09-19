@@ -11,6 +11,8 @@ import broadcast from '../../lib/broadcast.mjs';
 import { TABLES } from '../../schema.mjs';
 import crypto from 'crypto';
 
+const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*' };
+
 // Contract validation schema
 const validateContract = (task) => {
   const required = ['objective', 'expectedOutput', 'successCriteria', 'allowedActions', 'budget', 'ownerAgent'];
@@ -31,7 +33,7 @@ export async function leadAgentHandler(event) {
   const projectId = event.pathParameters?.projectId || body.projectId;
   const { outcome, deadline, captureId } = body;
   if (!projectId) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'projectId required in path or body' }) };
+    return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'projectId required in path or body' }) };
   }
   const now = Date.now();
 
@@ -158,6 +160,7 @@ Output valid JSON:
 
     return {
       statusCode: 200,
+      headers: CORS_HEADERS,
       body: JSON.stringify({
         planId,
         projectId,
@@ -178,6 +181,7 @@ Output valid JSON:
     const bedrockBlocked = /not allowed|invalid.*model|access|ValidationException/i.test(err.message || '');
     return {
       statusCode: bedrockBlocked ? 502 : 500,
+      headers: CORS_HEADERS,
       body: JSON.stringify({
         error: err.message,
         ...(bedrockBlocked ? { hint: 'Bedrock model access not enabled. In AWS console: Bedrock → Model access → enable a Claude/Haiku model, then retry.' } : {})

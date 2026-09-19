@@ -13,6 +13,8 @@ import { db } from '../../lib/dynamodb.mjs';
 import broadcast from '../../lib/broadcast.mjs';
 import { TABLES } from '../../schema.mjs';
 
+const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*' };
+
 // Lease config (from @crewdesk/core/lease.mjs)
 const LEASE_MS = 30000; // 30 seconds
 
@@ -39,6 +41,7 @@ export async function claimTaskHandler(event) {
     if (!task) {
       return {
         statusCode: 404,
+        headers: CORS_HEADERS,
         body: JSON.stringify({ error: 'task_not_found' })
       };
     }
@@ -48,6 +51,7 @@ export async function claimTaskHandler(event) {
     if (task.state !== 'ready' && (task.leaseExpiry || 0) > now) {
       return {
         statusCode: 409,
+        headers: CORS_HEADERS,
         body: JSON.stringify({ error: 'lease_held', leaseOwner: task.leaseOwner })
       };
     }
@@ -90,6 +94,7 @@ export async function claimTaskHandler(event) {
 
       return {
         statusCode: 200,
+        headers: CORS_HEADERS,
         body: JSON.stringify({
           leaseEpoch,
           leaseExpiry,
@@ -100,6 +105,7 @@ export async function claimTaskHandler(event) {
       if (err.message === 'CONDITION_FAILED') {
         return {
           statusCode: 409,
+          headers: CORS_HEADERS,
           body: JSON.stringify({ error: 'lease_held', leaseOwner: task.leaseOwner })
         };
       }
@@ -109,6 +115,7 @@ export async function claimTaskHandler(event) {
     console.error('Claim error:', err);
     return {
       statusCode: 500,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ error: err.message })
     };
   }
