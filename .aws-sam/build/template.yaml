@@ -1,0 +1,814 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CrewDesk Backend - Distributed Task Execution with Agent Orchestration
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 512
+    Runtime: nodejs22.x
+    Architectures:
+    - arm64
+    Environment:
+      Variables:
+        DYNAMODB_ENDPOINT:
+          Fn::If:
+          - IsLocal
+          - http://localhost:4566
+          - ''
+        APP_REGION:
+          Ref: AWS::Region
+  Api:
+    Cors:
+      AllowOrigin: '''*'''
+      AllowHeaders: '''Content-Type'''
+      AllowMethods: '''GET,POST,OPTIONS'''
+Conditions:
+  IsLocal:
+    Fn::Equals:
+    - Ref: Environment
+    - local
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - staging
+    - prod
+    - local
+Resources:
+  TasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-tasks
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: projectId
+        AttributeType: S
+      - AttributeName: sk
+        AttributeType: S
+      - AttributeName: state
+        AttributeType: S
+      - AttributeName: leaseOwner
+        AttributeType: S
+      - AttributeName: leaseExpiry
+        AttributeType: N
+      KeySchema:
+      - AttributeName: projectId
+        KeyType: HASH
+      - AttributeName: sk
+        KeyType: RANGE
+      GlobalSecondaryIndexes:
+      - IndexName: StateIndex
+        KeySchema:
+        - AttributeName: state
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      - IndexName: DeviceIndex
+        KeySchema:
+        - AttributeName: leaseOwner
+          KeyType: HASH
+        - AttributeName: leaseExpiry
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+  ProjectsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-projects
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: projectId
+        AttributeType: S
+      - AttributeName: sk
+        AttributeType: S
+      KeySchema:
+      - AttributeName: projectId
+        KeyType: HASH
+      - AttributeName: sk
+        KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+  DevicesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-devices
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: deviceId
+        AttributeType: S
+      - AttributeName: roomId
+        AttributeType: S
+      - AttributeName: lastHeartbeat
+        AttributeType: N
+      KeySchema:
+      - AttributeName: deviceId
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: RoomIndex
+        KeySchema:
+        - AttributeName: roomId
+          KeyType: HASH
+        - AttributeName: lastHeartbeat
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+  RoomsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-rooms
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: roomId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: roomId
+        KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+  CheckpointsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-checkpoints
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: projectId
+        AttributeType: S
+      - AttributeName: checkpointId
+        AttributeType: S
+      - AttributeName: taskId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: projectId
+        KeyType: HASH
+      - AttributeName: checkpointId
+        KeyType: RANGE
+      GlobalSecondaryIndexes:
+      - IndexName: TaskIndex
+        KeySchema:
+        - AttributeName: taskId
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-connections
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: projectId
+        AttributeType: S
+      - AttributeName: connectionId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: projectId
+        KeyType: HASH
+      - AttributeName: connectionId
+        KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+  ClaimTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-claim-task
+      CodeUri: ClaimTaskFunction
+      Handler: handlers/tasks/claim.claimTaskHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      Environment:
+        Variables:
+          TASKS_TABLE:
+            Ref: TasksTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+      Events:
+        ClaimTask:
+          Type: Api
+          Properties:
+            Path: /tasks/{taskId}/claim
+            Method: post
+    Metadata:
+      SamResourceId: ClaimTaskFunction
+  SubmitTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-submit-task
+      CodeUri: SubmitTaskFunction
+      Handler: handlers/tasks/submit.submitTaskHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/*
+          - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*
+          - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:application-inference-profile/*
+      Environment:
+        Variables:
+          TASKS_TABLE:
+            Ref: TasksTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+      Events:
+        SubmitTask:
+          Type: Api
+          Properties:
+            Path: /tasks/{taskId}/submit
+            Method: post
+    Metadata:
+      SamResourceId: SubmitTaskFunction
+  LeadAgentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-lead-agent
+      CodeUri: LeadAgentFunction
+      Handler: handlers/agents/lead.leadAgentHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ProjectsTable
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource:
+          - Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/*
+          - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*
+          - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:application-inference-profile/*
+      Environment:
+        Variables:
+          TASKS_TABLE:
+            Ref: TasksTable
+          PROJECTS_TABLE:
+            Ref: ProjectsTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+      Events:
+        LeadAgent:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/outcomes
+            Method: post
+    Metadata:
+      SamResourceId: LeadAgentFunction
+  SweepFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-sweep
+      CodeUri: SweepFunction
+      Handler: handlers/events/sweep.sweepHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      Environment:
+        Variables:
+          TASKS_TABLE:
+            Ref: TasksTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+      Events:
+        SweepManual:
+          Type: Api
+          Properties:
+            Path: /sweep
+            Method: post
+    Metadata:
+      SamResourceId: SweepFunction
+  ListTasksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-list-tasks
+      CodeUri: ListTasksFunction
+      Handler: handlers/tasks/list.listTasksHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      Environment:
+        Variables:
+          TASKS_TABLE:
+            Ref: TasksTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+      Events:
+        ListTasks:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/tasks
+            Method: get
+    Metadata:
+      SamResourceId: ListTasksFunction
+  RoomCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-room-create
+      CodeUri: RoomCreateFunction
+      Handler: handlers/airstream/room-create.createRoomHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: RoomsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DevicesTable
+      Environment:
+        Variables:
+          ROOMS_TABLE:
+            Ref: RoomsTable
+          DEVICES_TABLE:
+            Ref: DevicesTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+      Events:
+        CreateRoom:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms
+            Method: post
+    Metadata:
+      SamResourceId: RoomCreateFunction
+  DeviceJoinFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-device-join
+      CodeUri: DeviceJoinFunction
+      Handler: handlers/airstream/device-join.deviceJoinHandler
+      Timeout: 30
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: RoomsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DevicesTable
+      Environment:
+        Variables:
+          ROOMS_TABLE:
+            Ref: RoomsTable
+          DEVICES_TABLE:
+            Ref: DevicesTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+      Events:
+        DeviceJoin:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/devices
+            Method: post
+    Metadata:
+      SamResourceId: DeviceJoinFunction
+  DeviceHeartbeatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-device-heartbeat
+      CodeUri: DeviceHeartbeatFunction
+      Handler: handlers/airstream/device-heartbeat.deviceHeartbeatHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DevicesTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: RoomsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      Environment:
+        Variables:
+          DEVICES_TABLE:
+            Ref: DevicesTable
+          ROOMS_TABLE:
+            Ref: RoomsTable
+          TASKS_TABLE:
+            Ref: TasksTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+      Events:
+        Heartbeat:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/devices/{deviceId}/heartbeat
+            Method: post
+    Metadata:
+      SamResourceId: DeviceHeartbeatFunction
+  TaskDistributeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-task-distribute
+      CodeUri: TaskDistributeFunction
+      Handler: handlers/airstream/task-distribute.taskDistributeHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: RoomsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DevicesTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      Environment:
+        Variables:
+          ROOMS_TABLE:
+            Ref: RoomsTable
+          DEVICES_TABLE:
+            Ref: DevicesTable
+          TASKS_TABLE:
+            Ref: TasksTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+      Events:
+        Distribute:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/distribute
+            Method: post
+    Metadata:
+      SamResourceId: TaskDistributeFunction
+  CodeCollectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-code-collect
+      CodeUri: CodeCollectFunction
+      Handler: handlers/airstream/code-collect.codeCollectHandler
+      Timeout: 120
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: RoomsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      Environment:
+        Variables:
+          ROOMS_TABLE:
+            Ref: RoomsTable
+          TASKS_TABLE:
+            Ref: TasksTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+      Events:
+        Collect:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/collect
+            Method: post
+    Metadata:
+      SamResourceId: CodeCollectFunction
+  DemoExecuteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-demo-execute
+      CodeUri: DemoExecuteFunction
+      Handler: handlers/airstream/demo-execute.demoExecuteHandler
+      Timeout: 180
+      EphemeralStorage:
+        Size: 1024
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: RoomsTable
+      Environment:
+        Variables:
+          ROOMS_TABLE:
+            Ref: RoomsTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+      Events:
+        Execute:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/demo
+            Method: post
+    Metadata:
+      SamResourceId: DemoExecuteFunction
+  RoomStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-room-status
+      CodeUri: RoomStatusFunction
+      Handler: handlers/airstream/room-status.roomStatusHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: RoomsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DevicesTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      Environment:
+        Variables:
+          ROOMS_TABLE:
+            Ref: RoomsTable
+          DEVICES_TABLE:
+            Ref: DevicesTable
+          TASKS_TABLE:
+            Ref: TasksTable
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+      Events:
+        GetStatus:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}
+            Method: get
+    Metadata:
+      SamResourceId: RoomStatusFunction
+  WebSocketConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-websocket-connect
+      CodeUri: WebSocketConnectFunction
+      Handler: handlers/websocket/connect.connectHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConnectionsTable
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+    Metadata:
+      SamResourceId: WebSocketConnectFunction
+  WebSocketDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-websocket-disconnect
+      CodeUri: WebSocketDisconnectFunction
+      Handler: handlers/websocket/disconnect.disconnectHandler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConnectionsTable
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+    Metadata:
+      SamResourceId: WebSocketDisconnectFunction
+  SweepScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 minute)
+      State: ENABLED
+      Targets:
+      - Id: SweepFunctionTarget
+        Arn:
+          Fn::GetAtt:
+          - SweepFunction
+          - Arn
+        RoleArn:
+          Fn::GetAtt:
+          - EventBridgeRole
+          - Arn
+  SweepLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: SweepFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - SweepScheduleRule
+        - Arn
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: events.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: InvokeLambda
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource:
+              Fn::GetAtt:
+              - SweepFunction
+              - Arn
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: CrewDesk WebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+  WebSocketConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: $connect
+      Target:
+        Fn::Sub: integrations/${WebSocketConnectIntegration}
+  WebSocketConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketConnectFunction.Arn}/invocations
+  WebSocketDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: $disconnect
+      Target:
+        Fn::Sub: integrations/${WebSocketDisconnectIntegration}
+  WebSocketDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketDisconnectFunction.Arn}/invocations
+  WebSocketDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+    - WebSocketConnectRoute
+    - WebSocketDisconnectRoute
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      DeploymentId:
+        Ref: WebSocketDeployment
+      StageName:
+        Ref: Environment
+  WebSocketConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: WebSocketConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+  WebSocketDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: WebSocketDisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+Outputs:
+  TasksTableName:
+    Value:
+      Ref: TasksTable
+    Description: Tasks DynamoDB table name
+  ProjectsTableName:
+    Value:
+      Ref: ProjectsTable
+    Description: Projects DynamoDB table name
+  ClaimTaskFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - ClaimTaskFunction
+      - Arn
+    Description: Claim task Lambda ARN
+  SubmitTaskFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - SubmitTaskFunction
+      - Arn
+    Description: Submit task Lambda ARN
+  LeadAgentFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - LeadAgentFunction
+      - Arn
+    Description: Lead agent Lambda ARN
+  WebSocketApiEndpoint:
+    Value:
+      Fn::Sub: wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Description: WebSocket API endpoint for real-time events
+  ConnectionsTableName:
+    Value:
+      Ref: ConnectionsTable
+    Description: Connections DynamoDB table name
+  RoomsTableName:
+    Value:
+      Ref: RoomsTable
+    Description: Rooms DynamoDB table name
+  DevicesTableName:
+    Value:
+      Ref: DevicesTable
+    Description: Devices DynamoDB table name
+  RoomCreateFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - RoomCreateFunction
+      - Arn
+    Description: Room create Lambda ARN
+  DeviceJoinFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - DeviceJoinFunction
+      - Arn
+    Description: Device join Lambda ARN
+  TaskDistributeFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - TaskDistributeFunction
+      - Arn
+    Description: Task distribute Lambda ARN
+  CodeCollectFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - CodeCollectFunction
+      - Arn
+    Description: Code collect Lambda ARN
+  DemoExecuteFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - DemoExecuteFunction
+      - Arn
+    Description: Demo execute Lambda ARN

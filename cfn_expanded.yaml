@@ -1,0 +1,952 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CrewDesk Backend - Distributed Task Execution with Agent Orchestration
+Conditions:
+  IsLocal:
+    Fn::Equals:
+    - Ref: Environment
+    - local
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - staging
+    - prod
+    - local
+Resources:
+  WebSocketDisconnectFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: WebSocketDisconnectFunctionRolePolicy0
+        PolicyDocument:
+          Statement:
+          - Action:
+            - dynamodb:GetItem
+            - dynamodb:DeleteItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+            - dynamodb:ConditionCheckItem
+            Effect: Allow
+            Resource:
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}
+              - tableName:
+                  Ref: ConnectionsTable
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}/index/*
+              - tableName:
+                  Ref: ConnectionsTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+  SubmitTaskFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: SubmitTaskFunctionRolePolicy0
+        PolicyDocument:
+          Statement:
+          - Action:
+            - dynamodb:GetItem
+            - dynamodb:DeleteItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+            - dynamodb:ConditionCheckItem
+            Effect: Allow
+            Resource:
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}
+              - tableName:
+                  Ref: TasksTable
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}/index/*
+              - tableName:
+                  Ref: TasksTable
+      - PolicyName: SubmitTaskFunctionRolePolicy1
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - bedrock:InvokeModel
+            Resource:
+            - Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/*
+            - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*
+            - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:application-inference-profile/*
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+  WebSocketDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: WebSocketDisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+    Metadata:
+      SamResourceId: WebSocketDisconnectPermission
+  WebSocketConnectFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: WebSocketConnectFunctionRolePolicy0
+        PolicyDocument:
+          Statement:
+          - Action:
+            - dynamodb:GetItem
+            - dynamodb:DeleteItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+            - dynamodb:ConditionCheckItem
+            Effect: Allow
+            Resource:
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}
+              - tableName:
+                  Ref: ConnectionsTable
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}/index/*
+              - tableName:
+                  Ref: ConnectionsTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+  TasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-tasks
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: projectId
+        AttributeType: S
+      - AttributeName: sk
+        AttributeType: S
+      - AttributeName: state
+        AttributeType: S
+      - AttributeName: leaseOwner
+        AttributeType: S
+      - AttributeName: leaseExpiry
+        AttributeType: N
+      KeySchema:
+      - AttributeName: projectId
+        KeyType: HASH
+      - AttributeName: sk
+        KeyType: RANGE
+      GlobalSecondaryIndexes:
+      - IndexName: StateIndex
+        KeySchema:
+        - AttributeName: state
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      - IndexName: DeviceIndex
+        KeySchema:
+        - AttributeName: leaseOwner
+          KeyType: HASH
+        - AttributeName: leaseExpiry
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+    Metadata:
+      SamResourceId: TasksTable
+  WebSocketDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketDisconnectFunction.Arn}/invocations
+    Metadata:
+      SamResourceId: WebSocketDisconnectIntegration
+  ProjectsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-projects
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: projectId
+        AttributeType: S
+      - AttributeName: sk
+        AttributeType: S
+      KeySchema:
+      - AttributeName: projectId
+        KeyType: HASH
+      - AttributeName: sk
+        KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+    Metadata:
+      SamResourceId: ProjectsTable
+  WebSocketConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: $connect
+      Target:
+        Fn::Sub: integrations/${WebSocketConnectIntegration}
+    Metadata:
+      SamResourceId: WebSocketConnectRoute
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: CrewDesk WebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+    Metadata:
+      SamResourceId: WebSocketApi
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      DeploymentId:
+        Ref: WebSocketDeployment
+      StageName:
+        Ref: Environment
+    Metadata:
+      SamResourceId: WebSocketStage
+  LeadAgentFunction:
+    Type: AWS::Lambda::Function
+    Metadata:
+      SamResourceId: LeadAgentFunction
+    Properties:
+      Code:
+        S3Bucket: aws-sam-cli-managed-default-samclisourcebucket-km4tpyldcisu
+        S3Key: crewdesk/4ab9cd68e555ebbdd7d04e13b71f7a6f
+      FunctionName: crewdesk-lead-agent
+      Handler: handlers/agents/lead.leadAgentHandler
+      MemorySize: 512
+      Role:
+        Fn::GetAtt:
+        - LeadAgentFunctionRole
+        - Arn
+      Runtime: nodejs22.x
+      Timeout: 60
+      Environment:
+        Variables:
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+          APP_REGION:
+            Ref: AWS::Region
+          TASKS_TABLE:
+            Ref: TasksTable
+          PROJECTS_TABLE:
+            Ref: ProjectsTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+      Architectures:
+      - arm64
+  SweepFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: SweepFunctionRolePolicy0
+        PolicyDocument:
+          Statement:
+          - Action:
+            - dynamodb:GetItem
+            - dynamodb:DeleteItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+            - dynamodb:ConditionCheckItem
+            Effect: Allow
+            Resource:
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}
+              - tableName:
+                  Ref: TasksTable
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}/index/*
+              - tableName:
+                  Ref: TasksTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+  WebSocketConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketConnectFunction.Arn}/invocations
+    Metadata:
+      SamResourceId: WebSocketConnectIntegration
+  CheckpointsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-checkpoints
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: projectId
+        AttributeType: S
+      - AttributeName: checkpointId
+        AttributeType: S
+      - AttributeName: taskId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: projectId
+        KeyType: HASH
+      - AttributeName: checkpointId
+        KeyType: RANGE
+      GlobalSecondaryIndexes:
+      - IndexName: TaskIndex
+        KeySchema:
+        - AttributeName: taskId
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+    Metadata:
+      SamResourceId: CheckpointsTable
+  ServerlessRestApiProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId:
+        Ref: ServerlessRestApiDeployment7af7a308d6
+      RestApiId:
+        Ref: ServerlessRestApi
+      StageName: Prod
+  LeadAgentFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: LeadAgentFunctionRolePolicy0
+        PolicyDocument:
+          Statement:
+          - Action:
+            - dynamodb:GetItem
+            - dynamodb:DeleteItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+            - dynamodb:ConditionCheckItem
+            Effect: Allow
+            Resource:
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}
+              - tableName:
+                  Ref: TasksTable
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}/index/*
+              - tableName:
+                  Ref: TasksTable
+      - PolicyName: LeadAgentFunctionRolePolicy1
+        PolicyDocument:
+          Statement:
+          - Action:
+            - dynamodb:GetItem
+            - dynamodb:DeleteItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+            - dynamodb:ConditionCheckItem
+            Effect: Allow
+            Resource:
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}
+              - tableName:
+                  Ref: ProjectsTable
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}/index/*
+              - tableName:
+                  Ref: ProjectsTable
+      - PolicyName: LeadAgentFunctionRolePolicy2
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - bedrock:InvokeModel
+            Resource:
+            - Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/*
+            - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*
+            - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:application-inference-profile/*
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+  SweepLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: SweepFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - SweepScheduleRule
+        - Arn
+    Metadata:
+      SamResourceId: SweepLambdaPermission
+  ServerlessRestApiDeployment7af7a308d6:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      Description: 'RestApi deployment id: 7af7a308d64e4bfff7d2a083d0ee666cc834e914'
+      RestApiId:
+        Ref: ServerlessRestApi
+      StageName: Stage
+  SweepFunction:
+    Type: AWS::Lambda::Function
+    Metadata:
+      SamResourceId: SweepFunction
+    Properties:
+      Code:
+        S3Bucket: aws-sam-cli-managed-default-samclisourcebucket-km4tpyldcisu
+        S3Key: crewdesk/4ab9cd68e555ebbdd7d04e13b71f7a6f
+      FunctionName: crewdesk-sweep
+      Handler: handlers/events/sweep.sweepHandler
+      MemorySize: 512
+      Role:
+        Fn::GetAtt:
+        - SweepFunctionRole
+        - Arn
+      Runtime: nodejs22.x
+      Timeout: 60
+      Environment:
+        Variables:
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+          APP_REGION:
+            Ref: AWS::Region
+          TASKS_TABLE:
+            Ref: TasksTable
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+      Architectures:
+      - arm64
+  ClaimTaskFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: ClaimTaskFunctionRolePolicy0
+        PolicyDocument:
+          Statement:
+          - Action:
+            - dynamodb:GetItem
+            - dynamodb:DeleteItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+            - dynamodb:ConditionCheckItem
+            Effect: Allow
+            Resource:
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}
+              - tableName:
+                  Ref: TasksTable
+            - Fn::Sub:
+              - arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${tableName}/index/*
+              - tableName:
+                  Ref: TasksTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+  SweepScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 minute)
+      State: ENABLED
+      Targets:
+      - Id: SweepFunctionTarget
+        Arn:
+          Fn::GetAtt:
+          - SweepFunction
+          - Arn
+        RoleArn:
+          Fn::GetAtt:
+          - EventBridgeRole
+          - Arn
+    Metadata:
+      SamResourceId: SweepScheduleRule
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: events.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: InvokeLambda
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource:
+              Fn::GetAtt:
+              - SweepFunction
+              - Arn
+    Metadata:
+      SamResourceId: EventBridgeRole
+  ClaimTaskFunctionClaimTaskPermissionProd:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: ClaimTaskFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub:
+        - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${__ApiId__}/${__Stage__}/POST/tasks/*/claim
+        - __ApiId__:
+            Ref: ServerlessRestApi
+          __Stage__: '*'
+  SubmitTaskFunctionSubmitTaskPermissionProd:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: SubmitTaskFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub:
+        - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${__ApiId__}/${__Stage__}/POST/tasks/*/submit
+        - __ApiId__:
+            Ref: ServerlessRestApi
+          __Stage__: '*'
+  ClaimTaskFunction:
+    Type: AWS::Lambda::Function
+    Metadata:
+      SamResourceId: ClaimTaskFunction
+    Properties:
+      Code:
+        S3Bucket: aws-sam-cli-managed-default-samclisourcebucket-km4tpyldcisu
+        S3Key: crewdesk/4ab9cd68e555ebbdd7d04e13b71f7a6f
+      FunctionName: crewdesk-claim-task
+      Handler: handlers/tasks/claim.claimTaskHandler
+      MemorySize: 512
+      Role:
+        Fn::GetAtt:
+        - ClaimTaskFunctionRole
+        - Arn
+      Runtime: nodejs22.x
+      Timeout: 60
+      Environment:
+        Variables:
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+          APP_REGION:
+            Ref: AWS::Region
+          TASKS_TABLE:
+            Ref: TasksTable
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+      Architectures:
+      - arm64
+  WebSocketDisconnectFunction:
+    Type: AWS::Lambda::Function
+    Metadata:
+      SamResourceId: WebSocketDisconnectFunction
+    Properties:
+      Code:
+        S3Bucket: aws-sam-cli-managed-default-samclisourcebucket-km4tpyldcisu
+        S3Key: crewdesk/4ab9cd68e555ebbdd7d04e13b71f7a6f
+      FunctionName: crewdesk-websocket-disconnect
+      Handler: handlers/websocket/disconnect.disconnectHandler
+      MemorySize: 512
+      Role:
+        Fn::GetAtt:
+        - WebSocketDisconnectFunctionRole
+        - Arn
+      Runtime: nodejs22.x
+      Timeout: 60
+      Environment:
+        Variables:
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+          APP_REGION:
+            Ref: AWS::Region
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+      Architectures:
+      - arm64
+  WebSocketConnectFunction:
+    Type: AWS::Lambda::Function
+    Metadata:
+      SamResourceId: WebSocketConnectFunction
+    Properties:
+      Code:
+        S3Bucket: aws-sam-cli-managed-default-samclisourcebucket-km4tpyldcisu
+        S3Key: crewdesk/4ab9cd68e555ebbdd7d04e13b71f7a6f
+      FunctionName: crewdesk-websocket-connect
+      Handler: handlers/websocket/connect.connectHandler
+      MemorySize: 512
+      Role:
+        Fn::GetAtt:
+        - WebSocketConnectFunctionRole
+        - Arn
+      Runtime: nodejs22.x
+      Timeout: 60
+      Environment:
+        Variables:
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+          APP_REGION:
+            Ref: AWS::Region
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+      Architectures:
+      - arm64
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-connections
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: projectId
+        AttributeType: S
+      - AttributeName: connectionId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: projectId
+        KeyType: HASH
+      - AttributeName: connectionId
+        KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+    Metadata:
+      SamResourceId: ConnectionsTable
+  WebSocketDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+    - WebSocketConnectRoute
+    - WebSocketDisconnectRoute
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+    Metadata:
+      SamResourceId: WebSocketDeployment
+  DevicesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-devices
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: deviceId
+        AttributeType: S
+      - AttributeName: roomId
+        AttributeType: S
+      - AttributeName: lastHeartbeat
+        AttributeType: N
+      KeySchema:
+      - AttributeName: deviceId
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: RoomIndex
+        KeySchema:
+        - AttributeName: roomId
+          KeyType: HASH
+        - AttributeName: lastHeartbeat
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+    Metadata:
+      SamResourceId: DevicesTable
+  SweepFunctionSweepManualPermissionProd:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: SweepFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub:
+        - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${__ApiId__}/${__Stage__}/POST/sweep
+        - __ApiId__:
+            Ref: ServerlessRestApi
+          __Stage__: '*'
+  SubmitTaskFunction:
+    Type: AWS::Lambda::Function
+    Metadata:
+      SamResourceId: SubmitTaskFunction
+    Properties:
+      Code:
+        S3Bucket: aws-sam-cli-managed-default-samclisourcebucket-km4tpyldcisu
+        S3Key: crewdesk/4ab9cd68e555ebbdd7d04e13b71f7a6f
+      FunctionName: crewdesk-submit-task
+      Handler: handlers/tasks/submit.submitTaskHandler
+      MemorySize: 512
+      Role:
+        Fn::GetAtt:
+        - SubmitTaskFunctionRole
+        - Arn
+      Runtime: nodejs22.x
+      Timeout: 60
+      Environment:
+        Variables:
+          DYNAMODB_ENDPOINT:
+            Fn::If:
+            - IsLocal
+            - http://localhost:4566
+            - ''
+          APP_REGION:
+            Ref: AWS::Region
+          TASKS_TABLE:
+            Ref: TasksTable
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+      Tags:
+      - Key: lambda:createdBy
+        Value: SAM
+      Architectures:
+      - arm64
+  LeadAgentFunctionLeadAgentPermissionProd:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: LeadAgentFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub:
+        - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${__ApiId__}/${__Stage__}/POST/projects/*/outcomes
+        - __ApiId__:
+            Ref: ServerlessRestApi
+          __Stage__: '*'
+  WebSocketDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: $disconnect
+      Target:
+        Fn::Sub: integrations/${WebSocketDisconnectIntegration}
+    Metadata:
+      SamResourceId: WebSocketDisconnectRoute
+  ServerlessRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Body:
+        info:
+          version: '1.0'
+          title:
+            Ref: AWS::StackName
+        paths:
+          /tasks/{taskId}/submit:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SubmitTaskFunction.Arn}/invocations
+              responses: {}
+          /projects/{projectId}/outcomes:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LeadAgentFunction.Arn}/invocations
+              responses: {}
+          /tasks/{taskId}/claim:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ClaimTaskFunction.Arn}/invocations
+              responses: {}
+          /sweep:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SweepFunction.Arn}/invocations
+              responses: {}
+        swagger: '2.0'
+  WebSocketConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: WebSocketConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+    Metadata:
+      SamResourceId: WebSocketConnectPermission
+Outputs:
+  TasksTableName:
+    Value:
+      Ref: TasksTable
+    Description: Tasks DynamoDB table name
+  ProjectsTableName:
+    Value:
+      Ref: ProjectsTable
+    Description: Projects DynamoDB table name
+  ClaimTaskFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - ClaimTaskFunction
+      - Arn
+    Description: Claim task Lambda ARN
+  SubmitTaskFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - SubmitTaskFunction
+      - Arn
+    Description: Submit task Lambda ARN
+  LeadAgentFunctionArn:
+    Value:
+      Fn::GetAtt:
+      - LeadAgentFunction
+      - Arn
+    Description: Lead agent Lambda ARN
+  WebSocketApiEndpoint:
+    Value:
+      Fn::Sub: wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Description: WebSocket API endpoint for real-time events
+  ConnectionsTableName:
+    Value:
+      Ref: ConnectionsTable
+    Description: Connections DynamoDB table name
