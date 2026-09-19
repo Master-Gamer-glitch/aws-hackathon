@@ -13,6 +13,11 @@ Globals:
       Variables:
         DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
         APP_REGION: !Ref AWS::Region
+  Api:
+    Cors:
+      AllowOrigin: "'*'"
+      AllowHeaders: "'Content-Type'"
+      AllowMethods: "'GET,POST,OPTIONS'"
 
 Conditions:
   IsLocal: !Equals [!Ref Environment, 'local']
@@ -115,6 +120,21 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  RoomsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: crewdesk-rooms
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: roomId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: roomId
+          KeyType: HASH
       TimeToLiveSpecification:
         AttributeName: expiresAt
         Enabled: true
@@ -273,6 +293,202 @@ Resources:
           Properties:
             Path: /sweep
             Method: post
+
+  ListTasksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-list-tasks
+      CodeUri: services/api/
+      Handler: handlers/tasks/list.listTasksHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        ListTasks:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/tasks
+            Method: get
+
+  # ============================================================================
+  # Airstream: Distributed Device Execution
+  # ============================================================================
+
+  RoomCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-room-create
+      CodeUri: services/api/
+      Handler: handlers/airstream/room-create.createRoomHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DevicesTable
+      Environment:
+        Variables:
+          ROOMS_TABLE: !Ref RoomsTable
+          DEVICES_TABLE: !Ref DevicesTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        CreateRoom:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms
+            Method: post
+
+  DeviceJoinFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-device-join
+      CodeUri: services/api/
+      Handler: handlers/airstream/device-join.deviceJoinHandler
+      Timeout: 30
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DevicesTable
+      Environment:
+        Variables:
+          ROOMS_TABLE: !Ref RoomsTable
+          DEVICES_TABLE: !Ref DevicesTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        DeviceJoin:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/devices
+            Method: post
+
+  DeviceHeartbeatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-device-heartbeat
+      CodeUri: services/api/
+      Handler: handlers/airstream/device-heartbeat.deviceHeartbeatHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DevicesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+      Environment:
+        Variables:
+          DEVICES_TABLE: !Ref DevicesTable
+          ROOMS_TABLE: !Ref RoomsTable
+          TASKS_TABLE: !Ref TasksTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        Heartbeat:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/devices/{deviceId}/heartbeat
+            Method: post
+
+  TaskDistributeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-task-distribute
+      CodeUri: services/api/
+      Handler: handlers/airstream/task-distribute.taskDistributeHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DevicesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+      Environment:
+        Variables:
+          ROOMS_TABLE: !Ref RoomsTable
+          DEVICES_TABLE: !Ref DevicesTable
+          TASKS_TABLE: !Ref TasksTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        Distribute:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/distribute
+            Method: post
+
+  CodeCollectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-code-collect
+      CodeUri: services/api/
+      Handler: handlers/airstream/code-collect.codeCollectHandler
+      Timeout: 120
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+      Environment:
+        Variables:
+          ROOMS_TABLE: !Ref RoomsTable
+          TASKS_TABLE: !Ref TasksTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        Collect:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/collect
+            Method: post
+
+  DemoExecuteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-demo-execute
+      CodeUri: services/api/
+      Handler: handlers/airstream/demo-execute.demoExecuteHandler
+      Timeout: 180
+      EphemeralStorage:
+        Size: 1024
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+      Environment:
+        Variables:
+          ROOMS_TABLE: !Ref RoomsTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        Execute:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/demo
+            Method: post
+
+  RoomStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-room-status
+      CodeUri: services/api/
+      Handler: handlers/airstream/room-status.roomStatusHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DevicesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+      Environment:
+        Variables:
+          ROOMS_TABLE: !Ref RoomsTable
+          DEVICES_TABLE: !Ref DevicesTable
+          TASKS_TABLE: !Ref TasksTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        GetStatus:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}
+            Method: get
 
   WebSocketConnectFunction:
     Type: AWS::Serverless::Function
@@ -448,3 +664,31 @@ Outputs:
   ConnectionsTableName:
     Value: !Ref ConnectionsTable
     Description: Connections DynamoDB table name
+
+  RoomsTableName:
+    Value: !Ref RoomsTable
+    Description: Rooms DynamoDB table name
+
+  DevicesTableName:
+    Value: !Ref DevicesTable
+    Description: Devices DynamoDB table name
+
+  RoomCreateFunctionArn:
+    Value: !GetAtt RoomCreateFunction.Arn
+    Description: Room create Lambda ARN
+
+  DeviceJoinFunctionArn:
+    Value: !GetAtt DeviceJoinFunction.Arn
+    Description: Device join Lambda ARN
+
+  TaskDistributeFunctionArn:
+    Value: !GetAtt TaskDistributeFunction.Arn
+    Description: Task distribute Lambda ARN
+
+  CodeCollectFunctionArn:
+    Value: !GetAtt CodeCollectFunction.Arn
+    Description: Code collect Lambda ARN
+
+  DemoExecuteFunctionArn:
+    Value: !GetAtt DemoExecuteFunction.Arn
+    Description: Demo execute Lambda ARN
