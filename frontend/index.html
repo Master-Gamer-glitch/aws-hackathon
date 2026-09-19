@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaam Chalau</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #2a2a2a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1a1a1a;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-title-icon {
+            font-size: 28px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-secondary {
+            background: #404040;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #505050;
+        }
+
+        .toggle-btn {
+            background: #404040;
+            color: #e0e0e0;
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .toggle-btn.active {
+            background: #2563eb;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #2a2a2a;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            gap: 12px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: #2563eb;
+            color: white;
+        }
+
+        .message.ai .message-content {
+            background: #2a2a2a;
+            color: #e0e0e0;
+        }
+
+        .input-area {
+            padding: 16px 24px;
+            border-top: 1px solid #2a2a2a;
+            background: #1a1a1a;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .input-field {
+            flex: 1;
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            color: #e0e0e0;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: none;
+            max-height: 120px;
+            min-height: 44px;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #2563eb;
+            background: #333;
+        }
+
+        .input-field::placeholder {
+            color: #666;
+        }
+
+        .send-btn {
+            background: #2563eb;
+            color: white;
+            padding: 10px 20px;
+            height: 44px;
+        }
+
+        .send-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .send-btn:disabled {
+            background: #404040;
+            cursor: not-allowed;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: #1a1a1a;
+            border-left: 1px solid #2a2a2a;
+            display: flex;
+            flex-direction: column;
+            max-height: 100%;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #2a2a2a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .task-item {
+            padding: 12px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border-left: 3px solid #2563eb;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .task-item.pending {
+            border-left-color: #f59e0b;
+        }
+
+        .task-item.running {
+            border-left-color: #3b82f6;
+            background: #1f3a5f;
+        }
+
+        .task-item.done {
+            border-left-color: #10b981;
+            background: #1a3a2e;
+        }
+
+        .task-item.error {
+            border-left-color: #ef4444;
+            background: #3a1a1a;
+        }
+
+        .task-status {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            text-align: center;
+            padding: 24px;
+        }
+
+        .event-log {
+            flex: 1;
+            overflow-y: auto;
+            border-left: 1px solid #2a2a2a;
+            padding: 12px;
+        }
+
+        .event-item {
+            padding: 8px 12px;
+            background: #2a2a2a;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            font-size: 13px;
+            border-left: 2px solid #2563eb;
+            animation: slideIn 0.3s ease;
+        }
+
+        .event-item.device-event {
+            border-left-color: #3b82f6;
+        }
+
+        .event-item.task-event {
+            border-left-color: #8b5cf6;
+        }
+
+        .event-item.code-event {
+            border-left-color: #10b981;
+        }
+
+        .event-item.demo-event {
+            border-left-color: #f59e0b;
+        }
+
+        .event-time {
+            font-size: 11px;
+            color: #666;
+            float: right;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .status-badge.ready {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-badge.running {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .status-badge.error {
+            background: #ef4444;
+            color: white;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #505050;
+        }
+
+        .processing {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .dot {
+            width: 4px;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite;
+        }
+
+        .dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce {
+            0%, 80%, 100% {
+                opacity: 0.3;
+            }
+            40% {
+                opacity: 1;
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">
+            <span class="header-title-icon">⚡</span>
+            <span>Kaam Chalau</span>
+        </div>
+        <div class="header-controls">
+            <div class="control-group">
+                <button class="toggle-btn active" id="toggleFeed" onclick="toggleTaskFeed()">
+                    Hide Feed
+                </button>
+                <button class="btn-primary" id="joinBtn" onclick="joinAirstream()">
+                    🚀 Join Kaam Chalau
+                </button>
+                <button class="btn-danger" id="killSwitch" onclick="killSwitch()" disabled>
+                    ⚠️ KILL
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="chat-container">
+            <div class="messages" id="messages"></div>
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <textarea
+                        class="input-field"
+                        id="promptInput"
+                        placeholder="Describe what you want built... (Shift+Enter to send)"
+                        rows="1"
+                    ></textarea>
+                    <button class="send-btn" id="sendBtn" onclick="sendPrompt()">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h3>📋 Live Tasks</h3>
+            </div>
+            <div class="sidebar-content" id="taskFeed" style="flex: 1; border-bottom: 1px solid #2a2a2a;">
+                <div class="empty-state">No tasks yet</div>
+            </div>
+            <div class="event-log" id="eventLog">
+                <div style="text-align: center; color: #666; font-size: 12px; padding: 12px;">
+                    🔴 Live Events
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Production: Update these with your AWS endpoints
+        // Local:      Use http://127.0.0.1:3000 and ws://127.0.0.1:3001
+
+        const API_BASE_URL = 'https://34gffaaf1a.execute-api.us-west-2.amazonaws.com/dev';
+        const WS_BASE_URL = 'wss://34gffaaf1a.execute-api.us-west-2.amazonaws.com/dev';
+        let isRunning = false;
+        let sessionId = null;
+        let feedVisible = true;
+        let tasks = [];
+        let ws = null;
+        let projectId = 'proj_demo';
+
+        const messagesEl = document.getElementById('messages');
+        const promptInput = document.getElementById('promptInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const killBtn = document.getElementById('killSwitch');
+        const joinBtn = document.getElementById('joinBtn');
+        const taskFeed = document.getElementById('taskFeed');
+        const eventLog = document.getElementById('eventLog');
+        const sidebar = document.getElementById('sidebar');
+
+        // WebSocket Connection
+        function connectWebSocket() {
+          try {
+            ws = new WebSocket(`${WS_BASE_URL}?projectId=${projectId}`);
+            ws.onopen = () => {
+              console.log('WebSocket connected');
+              addEvent('🟢 Connected to live event stream', 'system');
+            };
+            ws.onmessage = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                addEvent(data.message, getEventCategory(data.type));
+              } catch (e) {
+                console.error('Error parsing message:', e);
+              }
+            };
+            ws.onerror = (error) => {
+              console.error('WebSocket error:', error);
+              addEvent('❌ WebSocket connection error', 'error');
+            };
+            ws.onclose = () => {
+              addEvent('🔴 Disconnected from event stream', 'system');
+              // Reconnect after 3 seconds
+              setTimeout(connectWebSocket, 3000);
+            };
+          } catch (e) {
+            console.error('WebSocket error:', e);
+          }
+        }
+
+        function getEventCategory(type) {
+          if (type.startsWith('device')) return 'device-event';
+          if (type.startsWith('task')) return 'task-event';
+          if (type.startsWith('code')) return 'code-event';
+          if (type.startsWith('demo')) return 'demo-event';
+          return 'status-event';
+        }
+
+        function addEvent(message, category = 'status-event') {
+          const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const eventEl = document.createElement('div');
+          eventEl.className = `event-item ${category}`;
+          eventEl.innerHTML = `<span class="event-time">${time}</span>${message}`;
+          eventLog.insertBefore(eventEl, eventLog.firstChild);
+
+          // Keep only last 50 events
+          while (eventLog.children.length > 51) {
+            eventLog.removeChild(eventLog.lastChild);
+          }
+        }
+
+        promptInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.shiftKey) {
+                sendPrompt();
+            }
+        });
+
+        function addMessage(text, isUser = false) {
+            const msg = document.createElement('div');
+            msg.className = `message ${isUser ? 'user' : 'ai'}`;
+            msg.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+            messagesEl.appendChild(msg);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function sendPrompt() {
+            const text = promptInput.value.trim();
+            if (!text) return;
+
+            addMessage(text, true);
+            promptInput.value = '';
+            promptInput.style.height = 'auto';
+            sendBtn.disabled = true;
+
+            try {
+                isRunning = true;
+                killBtn.disabled = false;
+                updateUI();
+
+                addMessage('🤔 Processing your request...', false);
+
+                const response = await fetch(`${API_BASE_URL}/projects/demo/tasks`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        projectId: 'proj_demo',
+                        objective: text,
+                        contract: 'M',
+                        budget: { usd: 10 },
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                sessionId = data.taskId;
+
+                addMessage(`✅ Started! Task ID: ${sessionId}\n\nAI is now breaking down your request into tasks and working on them automatically.`, false);
+
+                pollTasks();
+
+            } catch (error) {
+                addMessage(`❌ Error: ${error.message}`, false);
+                isRunning = false;
+                killBtn.disabled = true;
+                updateUI();
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        async function pollTasks() {
+            if (!isRunning || !sessionId) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/projects/proj_demo/tasks`);
+                if (!response.ok) throw new Error('Failed to fetch tasks');
+
+                const data = await response.json();
+                tasks = data.tasks || [];
+
+                updateTaskFeed();
+
+                const allDone = tasks.every(t =>
+                    t.state === 'done' || t.state === 'failed'
+                );
+
+                if (!allDone && isRunning) {
+                    setTimeout(pollTasks, 2000);
+                } else if (allDone) {
+                    addMessage('🎉 All tasks completed!', false);
+                    isRunning = false;
+                    killBtn.disabled = true;
+                    updateUI();
+                }
+            } catch (error) {
+                console.error('Poll error:', error);
+                if (isRunning) {
+                    setTimeout(pollTasks, 5000);
+                }
+            }
+        }
+
+        function updateTaskFeed() {
+            if (tasks.length === 0) {
+                taskFeed.innerHTML = '<div class="empty-state">No tasks yet</div>';
+                return;
+            }
+
+            taskFeed.innerHTML = tasks.map(task => {
+                const stateClass = task.state === 'done' ? 'done'
+                                 : task.state === 'leased' ? 'running'
+                                 : task.state === 'failed' ? 'error'
+                                 : 'pending';
+
+                return `
+                    <div class="task-item ${stateClass}">
+                        <div><strong>${task.objective}</strong></div>
+                        <div class="task-status">ID: ${task.taskId}</div>
+                        <div class="task-status">Owner: ${task.owner || '—'}</div>
+                        <span class="status-badge ${task.state}">${task.state.toUpperCase()}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleTaskFeed() {
+            feedVisible = !feedVisible;
+            sidebar.classList.toggle('hidden');
+            document.getElementById('toggleFeed').textContent =
+                feedVisible ? 'Hide Feed' : 'Show Feed';
+        }
+
+        function killSwitch() {
+            if (confirm('Stop all running tasks?')) {
+                isRunning = false;
+                killBtn.disabled = true;
+                addMessage('🛑 Stopped.', false);
+                updateUI();
+            }
+        }
+
+        // Airstream event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            joinBtn?.addEventListener('click', () => {
+                const menu = document.createElement('div');
+                menu.innerHTML = `
+                    <div style="position: absolute; top: 60px; right: 10px; background: #2a2a2a; border: 1px solid #444; border-radius: 8px; padding: 12px; z-index: 1000; min-width: 200px;">
+                        <button onclick="createRoom()" style="display: block; width: 100%; padding: 10px; margin-bottom: 8px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            ➕ Create Room
+                        </button>
+                        <button onclick="promptJoinRoom()" style="display: block; width: 100%; padding: 10px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            🔗 Join Room
+                        </button>
+                    </div>
+                `;
+                document.body.appendChild(menu);
+                setTimeout(() => menu.remove(), 3000);
+            });
+        });
+
+        async function createRoom() {
+            try {
+                addEvent('📡 Creating Airstream room...', 'system');
+                const response = await fetch(`${API_BASE_URL}/projects/${projectId}/rooms`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: 'master_' + Date.now(),
+                        deviceName: 'Master Device'
+                    })
+                });
+
+                if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+                const data = await response.json();
+                const roomId = data.roomId;
+
+                addEvent(`✅ Room created: ${roomId}`, 'system');
+                addMessage(`🚀 Airstream room created!\n\nRoom ID: ${roomId}\n\nShare this ID with other devices to join.`, false);
+
+                // Store room ID in URL hash
+                window.location.hash = `room=${roomId}`;
+
+            } catch (error) {
+                addEvent(`❌ Create room failed: ${error.message}`, 'error');
+                addMessage(`❌ Failed to create room: ${error.message}`, false);
+            }
+        }
+
+        async function joinRoom(roomId) {
+            try {
+                addEvent(`🌐 Joining room: ${roomId}...`, 'system');
+                const response = await fetch(`${API_BASE_URL}/projects/${projectId}/rooms/${roomId}/devices`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: 'slave_' + Date.now(),
+                        deviceName: 'Slave Device'
+                    })
+                });
+
+                if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+                const data = await response.json();
+
+                addEvent(`✅ Device joined: ${data.deviceId}`, 'device-event');
+                addMessage(`🌐 Joined room ${roomId}!\n\nCapabilities detected:\n${Object.entries(data.capabilities || {}).map(([k,v]) => `  • ${k}: ${v}`).join('\n')}`, false);
+
+                // Start heartbeat
+                startHeartbeat(roomId, data.deviceId);
+
+            } catch (error) {
+                addEvent(`❌ Join failed: ${error.message}`, 'error');
+                addMessage(`❌ Failed to join room: ${error.message}`, false);
+            }
+        }
+
+        function promptJoinRoom() {
+            // Check URL hash first
+            const hashRoom = new URLSearchParams(window.location.hash.slice(1)).get('room');
+            const roomId = prompt('Enter room ID to join:', hashRoom || '');
+            if (roomId) {
+                joinRoom(roomId);
+            }
+        }
+
+        let heartbeatInterval = null;
+        function startHeartbeat(roomId, deviceId) {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+
+            heartbeatInterval = setInterval(async () => {
+                try {
+                    await fetch(`${API_BASE_URL}/projects/${projectId}/rooms/${roomId}/devices/${deviceId}/heartbeat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            status: 'ok',
+                            metrics: {
+                                cpuUsage: Math.random() * 80,
+                                memUsage: Math.random() * 20 + 5,
+                                activeTaskCount: 0
+                            }
+                        })
+                    });
+                } catch (error) {
+                    console.error('Heartbeat error:', error);
+                }
+            }, 8000);
+        }
+
+        function updateUI() {
+            sendBtn.disabled = isRunning;
+            promptInput.disabled = isRunning;
+        }
+
+        // Auto-resize textarea
+        promptInput.addEventListener('input', () => {
+            promptInput.style.height = 'auto';
+            promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + 'px';
+        });
+
+        // Connect on load
+        window.addEventListener('load', () => {
+            connectWebSocket();
+            addMessage('👋 Hey! Describe what you want built and I\'ll break it down into tasks and execute them automatically.', false);
+            addMessage('You can join Airstream for real-time collaboration, or just watch the live task feed.', false);
+        });
+    </script>
+</body>
+</html>
