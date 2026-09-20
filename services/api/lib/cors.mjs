@@ -17,12 +17,15 @@ export function withCors(handler) {
       const res = await handler(event, context);
       return { ...res, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS, ...(res?.headers || {}) } };
     } catch (err) {
-      const bad = err instanceof SyntaxError; // JSON.parse of a malformed request body
+      // SyntaxError = JSON.parse of a malformed body; errors carrying a 4xx statusCode
+      // (e.g. ArtifactError) are the caller's fault and keep their message.
+      const status = err instanceof SyntaxError ? 400
+        : (Number.isInteger(err?.statusCode) && err.statusCode >= 400 && err.statusCode < 500 ? err.statusCode : 500);
       console.error('Unhandled handler error:', err);
       return {
-        statusCode: bad ? 400 : 500,
+        statusCode: status,
         headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-        body: JSON.stringify({ error: bad ? 'Invalid JSON body' : err.message }),
+        body: JSON.stringify({ error: err instanceof SyntaxError ? 'Invalid JSON body' : err.message }),
       };
     }
   };

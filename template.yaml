@@ -186,6 +186,26 @@ Resources:
         AttributeName: expiresAt
         Enabled: true
 
+  # Files devices submit, the merged project collect builds, and the demo runs from.
+  # Lambda /tmp is per-instance, so this is what lets separate invocations share files.
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireArtifacts
+            Status: Enabled
+            ExpirationInDays: 7
+
   # ============================================================================
   # Lambda Functions
   # ============================================================================
@@ -197,10 +217,18 @@ Resources:
       CodeUri: services/api/
       Handler: handlers/tasks/claim.claimTaskHandler
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
       Environment:
         Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
           TASKS_TABLE: !Ref TasksTable
           DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
           CONNECTIONS_TABLE: !Ref ConnectionsTable
@@ -218,6 +246,15 @@ Resources:
       CodeUri: services/api/
       Handler: handlers/tasks/submit.submitTaskHandler
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
+        - S3CrudPolicy:
+            BucketName: !Ref ArtifactsBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
         - Version: '2012-10-17'
@@ -231,6 +268,8 @@ Resources:
                 - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:application-inference-profile/*'
       Environment:
         Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          ARTIFACTS_BUCKET: !Ref ArtifactsBucket
           TASKS_TABLE: !Ref TasksTable
           DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
           CONNECTIONS_TABLE: !Ref ConnectionsTable
@@ -248,6 +287,13 @@ Resources:
       CodeUri: services/api/
       Handler: handlers/agents/lead.leadAgentHandler
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
         - DynamoDBCrudPolicy:
@@ -263,6 +309,8 @@ Resources:
                 - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:application-inference-profile/*'
       Environment:
         Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
           TASKS_TABLE: !Ref TasksTable
           PROJECTS_TABLE: !Ref ProjectsTable
           DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
@@ -280,10 +328,18 @@ Resources:
       CodeUri: services/api/
       Handler: handlers/events/sweep.sweepHandler
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
       Environment:
         Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
           TASKS_TABLE: !Ref TasksTable
           DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
           CONNECTIONS_TABLE: !Ref ConnectionsTable
@@ -349,12 +405,21 @@ Resources:
       Handler: handlers/airstream/device-join.deviceJoinHandler
       Timeout: 30
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
         - DynamoDBCrudPolicy:
             TableName: !Ref RoomsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref DevicesTable
       Environment:
         Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
           ROOMS_TABLE: !Ref RoomsTable
           DEVICES_TABLE: !Ref DevicesTable
           DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
@@ -372,6 +437,13 @@ Resources:
       CodeUri: services/api/
       Handler: handlers/airstream/device-heartbeat.deviceHeartbeatHandler
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
         - DynamoDBCrudPolicy:
             TableName: !Ref DevicesTable
         - DynamoDBCrudPolicy:
@@ -380,6 +452,8 @@ Resources:
             TableName: !Ref TasksTable
       Environment:
         Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
           DEVICES_TABLE: !Ref DevicesTable
           ROOMS_TABLE: !Ref RoomsTable
           TASKS_TABLE: !Ref TasksTable
@@ -398,6 +472,13 @@ Resources:
       CodeUri: services/api/
       Handler: handlers/airstream/task-distribute.taskDistributeHandler
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
         - DynamoDBCrudPolicy:
             TableName: !Ref RoomsTable
         - DynamoDBCrudPolicy:
@@ -406,6 +487,8 @@ Resources:
             TableName: !Ref TasksTable
       Environment:
         Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
           ROOMS_TABLE: !Ref RoomsTable
           DEVICES_TABLE: !Ref DevicesTable
           TASKS_TABLE: !Ref TasksTable
@@ -425,12 +508,24 @@ Resources:
       Handler: handlers/airstream/code-collect.codeCollectHandler
       Timeout: 120
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
+        - S3CrudPolicy:
+            BucketName: !Ref ArtifactsBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref RoomsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
       Environment:
         Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          ARTIFACTS_BUCKET: !Ref ArtifactsBucket
           ROOMS_TABLE: !Ref RoomsTable
           TASKS_TABLE: !Ref TasksTable
           DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
@@ -448,13 +543,26 @@ Resources:
       CodeUri: services/api/
       Handler: handlers/airstream/demo-execute.demoExecuteHandler
       Timeout: 180
+      MemorySize: 1024
       EphemeralStorage:
         Size: 1024
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
+        - S3ReadPolicy:
+            BucketName: !Ref ArtifactsBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref RoomsTable
       Environment:
         Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          ARTIFACTS_BUCKET: !Ref ArtifactsBucket
           ROOMS_TABLE: !Ref RoomsTable
           DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
       Events:
@@ -692,3 +800,7 @@ Outputs:
   DemoExecuteFunctionArn:
     Value: !GetAtt DemoExecuteFunction.Arn
     Description: Demo execute Lambda ARN
+
+  ArtifactsBucketName:
+    Value: !Ref ArtifactsBucket
+    Description: S3 bucket for submitted, merged and demo artifacts

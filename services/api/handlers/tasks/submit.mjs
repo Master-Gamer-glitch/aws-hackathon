@@ -1,6 +1,10 @@
 /**
  * POST /tasks/{id}/submit
- * Device submits completed task with fencing check
+ * Device submits completed task with fencing check.
+ *
+ * Body: { deviceId, leaseEpoch, manifest?, artifacts?: [{ path, content, encoding? }] }
+ * `artifacts` are the files the device produced. They are stored in S3 before the task
+ * is marked submitted, so a committed task always has its files available to collect.
  *
  * Fencing: only the device that CLAIMED the task (same leaseEpoch) can submit
  * Prevents stale/duplicate submissions after task reassignment
@@ -10,12 +14,20 @@ import { db } from '../../lib/dynamodb.mjs';
 import broadcast from '../../lib/broadcast.mjs';
 import { invokeBedrockAgent } from '../../lib/bedrock.mjs';
 import { TABLES } from '../../schema.mjs';
+import { withCors } from '../../lib/cors.mjs';
+import { validateArtifacts, putFiles, deletePrefix, taskPrefix } from '../../lib/artifacts.mjs';
 
 const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*' };
 
-export async function submitTaskHandler(event) {
+async function submitTaskHandlerImpl(event) {
   const { taskId } = event.pathParameters;
-  const { deviceId, leaseEpoch, manifest } = JSON.parse(event.body);
+  const { deviceId, leaseEpoch, manifest: rawManifest, artifacts } = JSON.parse(event.body);
+  const files = validateArtifacts(artifacts); // 400 before touching anything
+  const manifest = {
+    ...(rawManifest && typeof rawManifest === 'object' ? rawManifest : {}),
+    ...(files.length ? { files: files.map((f) => f.path) } : {}),
+    artifactCount: files.length,
+  };
   const now = Date.now();
 
   try {
@@ -48,6 +60,14 @@ export async function submitTaskHandler(event) {
           submittedEpoch: leaseEpoch
         })
       };
+    }
+
+    // 2b. Store the produced files first, so 'committed' always implies they exist.
+    // A resubmission replaces the previous files instead of mixing with them.
+    if (files.length) {
+      const prefix = taskPrefix(projectId, actualTaskId);
+      await deletePrefix(prefix);
+      await putFiles(prefix, files);
     }
 
     // 3. Mark task as submitted
@@ -185,4 +205,5 @@ export async function submitTaskHandler(event) {
   }
 }
 
+export const submitTaskHandler = withCors(submitTaskHandlerImpl);
 export default submitTaskHandler;
