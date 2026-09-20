@@ -165,11 +165,15 @@ export default function AirstreamConsole() {
   });
   const collect = action("collect", async (id) => {
     const r = await airstream.collect(id);
-    return `Collected ${r.taskCount} task(s) → ${r.filesIntegrated} files integrated (${r.verifyStatus})`;
+    if (r.filesIntegrated === 0) return r.message;
+    const conflicts = r.conflicts.length ? `, ${r.conflicts.length} conflict(s): ${r.conflicts.map((c) => c.path).join(", ")}` : "";
+    const notes = r.verifyNotes?.length ? ` — ${r.verifyNotes.join("; ")}` : "";
+    return `Integrated ${r.filesIntegrated} file(s) from ${r.taskCount} task(s)${conflicts}. Verify ${r.verifyStatus}${notes}`;
   });
   const demo = action("demo", async (id) => {
     const r = await airstream.demo(id);
-    return `Demo ${r.success ? "succeeded" : "failed"} — ${r.projectType}, exit ${r.exitCode}, ${r.runtime}ms`;
+    const how = r.timedOut ? "still running, stopped at the time limit" : `exit ${r.exitCode}`;
+    return `Demo ${r.success ? "succeeded" : "failed"} — ${r.projectType}, ${how}, ${r.runtime}ms`;
   });
 
   const copyLink = async () => {
@@ -310,9 +314,18 @@ export default function AirstreamConsole() {
                 )}
 
                 {room?.demoStatus && (
-                  <p className="mt-4 rounded-md bg-crew-surface px-3 py-2 font-mono text-xs text-crew-text-secondary">
-                    last demo: {room.demoStatus.projectType} · exit {room.demoStatus.exitCode} · {room.demoStatus.runtime}ms
-                  </p>
+                  <div className="mt-4 rounded-md bg-crew-surface px-3 py-2">
+                    <p className="font-mono text-xs text-crew-text-secondary">
+                      last demo: <span className={room.demoStatus.success ? "text-crew-success" : "text-crew-error"}>
+                        {room.demoStatus.success ? "ok" : "failed"}
+                      </span> · {room.demoStatus.projectType} · {room.demoStatus.timedOut ? "stopped at time limit" : `exit ${room.demoStatus.exitCode}`} · {room.demoStatus.runtime}ms
+                    </p>
+                    {room.demoStatus.outputTail && (
+                      <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-crew-text-muted">
+                        {room.demoStatus.outputTail.trim()}
+                      </pre>
+                    )}
+                  </div>
                 )}
               </section>
 

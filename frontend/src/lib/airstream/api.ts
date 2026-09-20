@@ -16,6 +16,8 @@ export interface BackendTask {
   leaseExpiry: number | null;
   attempts: number;
   objective: string | null;
+  /** crew role named in the task contract (e.g. "coder"); drives which character the office animates */
+  ownerAgent?: string | null;
   budget: { usd?: number } | null;
   resultDeviceId: string | null;
 }
@@ -58,10 +60,12 @@ export interface RoomStatus {
   demoStatus: {
     projectType: string;
     command: string;
-    exitCode: number;
+    exitCode: number | null;
     runtime: number;
     success: boolean;
+    timedOut?: boolean;
     outputSize: number;
+    outputTail?: string;
   } | null;
   masterDir: string | null;
 }
@@ -76,22 +80,32 @@ export interface HeartbeatResult {
   tasksRedistributed: boolean;
 }
 export interface DistributeResult { roomId: string; tasksDistributed: number; tasksFailed: number; timestamp: number }
+export interface CollectConflict { path: string; overwrote: string; by: string }
 export interface CollectResult {
   roomId: string;
-  masterDir: string;
+  /** s3:// location of the merged project, or null when there was nothing to collect */
+  masterDir: string | null;
   filesIntegrated: number;
   taskCount: number;
-  verifyStatus: string;
+  deviceCount: number;
+  /** files two tasks both wrote; the later task won */
+  conflicts: CollectConflict[];
+  verifyStatus: 'passed' | 'failed' | 'skipped';
+  verifyNotes?: string[];
   message: string;
 }
 export interface DemoResult {
   roomId: string;
   projectType: string;
   command: string;
-  exitCode: number;
+  exitCode: number | null;
+  /** true when the project was still running (e.g. a dev server) and was stopped at the time limit */
+  timedOut: boolean;
   runtime: number;
   success: boolean;
   outputLength: number;
+  /** tail of the combined stdout/stderr */
+  output: string;
   message: string;
 }
 
