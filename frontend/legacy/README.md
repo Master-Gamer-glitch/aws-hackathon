@@ -29,7 +29,7 @@ frontend/
 All endpoints are in `config.js`:
 
 ```javascript
-const API_BASE_URL = 'https://34gffaaf1a.execute-api.us-west-2.amazonaws.com/dev';
+const API_BASE_URL = 'https://hdnq75ygs3.execute-api.us-west-2.amazonaws.com/Prod';
 const WS_BASE_URL = 'wss://34gffaaf1a.execute-api.us-west-2.amazonaws.com/dev';
 ```
 

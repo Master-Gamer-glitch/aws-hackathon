@@ -1,0 +1,986 @@
+{
+ "primarySeatNames": [
+  "desk-lead",
+  "desk-coder",
+  "desk-design",
+  "desk-rag",
+  "desk-qa",
+  "desk-launch",
+  "desk-coder-2",
+  "desk-coder-3",
+  "desk-coder-4",
+  "desk-coder-5",
+  "desk-design-2",
+  "desk-design-3",
+  "desk-design-4",
+  "desk-lead-2",
+  "desk-lead-3",
+  "desk-lead-4",
+  "desk-lead-5",
+  "desk-rag-2",
+  "desk-rag-3",
+  "desk-qa-2",
+  "desk-qa-3",
+  "desk-qa-4",
+  "desk-launch-2",
+  "desk-launch-3",
+  "desk-servers",
+  "desk-servers-2"
+ ],
+ "agentSeats": {
+  "lead": "desk-lead",
+  "coder": "desk-coder",
+  "design": "desk-design",
+  "research": "desk-rag",
+  "qa": "desk-qa",
+  "marketing": "desk-launch"
+ },
+ "coffee": {
+  "machineTile": {
+   "x": 26,
+   "y": 33
+  },
+  "trayTile": {
+   "x": 29,
+   "y": 31
+  },
+  "trayStand": {
+   "x": 29,
+   "y": 32
+  },
+  "machineStand": {
+   "x": 26,
+   "y": 36
+  },
+  "sinkTile": {
+   "x": 28,
+   "y": 34
+  },
+  "sinkStand": {
+   "x": 28,
+   "y": 36
+  },
+  "maxCups": 4
+ },
+ "anchors": {
+  "calendar": {
+   "x": 4,
+   "y": 1
+  },
+  "boards": {
+   "x": 25,
+   "y": 14
+  },
+  "boardsPad": 0,
+  "boardStands": {
+   "pin": {
+    "x": 26,
+    "y": 15
+   },
+   "take": {
+    "x": 27,
+    "y": 15
+   },
+   "archive": {
+    "x": 28,
+    "y": 15
+   }
+  },
+  "clock": {
+   "x": 20,
+   "y": 1
+  },
+  "askBoard": {
+   "px": 163,
+   "y": 26
+  }
+ },
+ "errandSpots": [
+  {
+   "kind": "water",
+   "stand": {
+    "x": 2,
+    "y": 4
+   },
+   "facing": "left",
+   "fx": {
+    "x": 1,
+    "y": 4
+   },
+   "duration": 4.5
+  },
+  {
+   "kind": "water",
+   "stand": {
+    "x": 45,
+    "y": 4
+   },
+   "facing": "right",
+   "fx": {
+    "x": 46,
+    "y": 4
+   },
+   "duration": 4.5
+  },
+  {
+   "kind": "water",
+   "stand": {
+    "x": 2,
+    "y": 18
+   },
+   "facing": "left",
+   "fx": {
+    "x": 1,
+    "y": 18
+   },
+   "duration": 4.5
+  },
+  {
+   "kind": "water",
+   "stand": {
+    "x": 45,
+    "y": 18
+   },
+   "facing": "right",
+   "fx": {
+    "x": 46,
+    "y": 18
+   },
+   "duration": 4.5
+  },
+  {
+   "kind": "water",
+   "stand": {
+    "x": 2,
+    "y": 29
+   },
+   "facing": "left",
+   "fx": {
+    "x": 1,
+    "y": 29
+   },
+   "duration": 4.5
+  },
+  {
+   "kind": "water",
+   "stand": {
+    "x": 12,
+    "y": 29
+   },
+   "facing": "right",
+   "fx": {
+    "x": 13,
+    "y": 29
+   },
+   "duration": 4.5
+  },
+  {
+   "kind": "water",
+   "stand": {
+    "x": 30,
+    "y": 28
+   },
+   "facing": "right",
+   "fx": {
+    "x": 31,
+    "y": 28
+   },
+   "duration": 4.5
+  },
+  {
+   "kind": "water",
+   "stand": {
+    "x": 17,
+    "y": 10
+   },
+   "facing": "left",
+   "fx": {
+    "x": 16,
+    "y": 11
+   },
+   "duration": 4.5,
+   "godOnly": true
+  },
+  {
+   "kind": "window",
+   "stand": {
+    "x": 11,
+    "y": 3
+   },
+   "facing": "up",
+   "fx": {
+    "x": 10,
+    "y": 1
+   },
+   "duration": 5
+  },
+  {
+   "kind": "window",
+   "stand": {
+    "x": 37,
+    "y": 3
+   },
+   "facing": "up",
+   "fx": {
+    "x": 36,
+    "y": 1
+   },
+   "duration": 5
+  },
+  {
+   "kind": "dispenser",
+   "stand": {
+    "x": 34,
+    "y": 4
+   },
+   "facing": "up",
+   "fx": {
+    "x": 34,
+    "y": 3
+   },
+   "duration": 3.5
+  },
+  {
+   "kind": "dispenser",
+   "stand": {
+    "x": 16,
+    "y": 16
+   },
+   "facing": "left",
+   "fx": {
+    "x": 15,
+    "y": 16
+   },
+   "duration": 3.5
+  },
+  {
+   "kind": "fridge",
+   "stand": {
+    "x": 29,
+    "y": 36
+   },
+   "facing": "up",
+   "fx": {
+    "x": 29,
+    "y": 35
+   },
+   "duration": 3.2
+  },
+  {
+   "kind": "shelf",
+   "stand": {
+    "x": 11,
+    "y": 3
+   },
+   "facing": "right",
+   "fx": {
+    "x": 12,
+    "y": 2
+   },
+   "duration": 4
+  },
+  {
+   "kind": "shelf",
+   "stand": {
+    "x": 2,
+    "y": 16
+   },
+   "facing": "up",
+   "fx": {
+    "x": 2,
+    "y": 14
+   },
+   "duration": 4
+  },
+  {
+   "kind": "shelf",
+   "stand": {
+    "x": 26,
+    "y": 28
+   },
+   "facing": "up",
+   "fx": {
+    "x": 26,
+    "y": 26
+   },
+   "duration": 4
+  },
+  {
+   "kind": "meet",
+   "stand": {
+    "x": 22,
+    "y": 17
+   },
+   "facing": "down",
+   "fx": {
+    "x": 22,
+    "y": 17
+   },
+   "duration": 7
+  },
+  {
+   "kind": "meet",
+   "stand": {
+    "x": 25,
+    "y": 17
+   },
+   "facing": "down",
+   "fx": {
+    "x": 25,
+    "y": 17
+   },
+   "duration": 7
+  },
+  {
+   "kind": "meet",
+   "stand": {
+    "x": 19,
+    "y": 19
+   },
+   "facing": "right",
+   "fx": {
+    "x": 19,
+    "y": 19
+   },
+   "duration": 7
+  },
+  {
+   "kind": "meet",
+   "stand": {
+    "x": 28,
+    "y": 20
+   },
+   "facing": "left",
+   "fx": {
+    "x": 28,
+    "y": 20
+   },
+   "duration": 7
+  },
+  {
+   "kind": "servers",
+   "stand": {
+    "x": 36,
+    "y": 31
+   },
+   "facing": "up",
+   "fx": {
+    "x": 36,
+    "y": 31
+   },
+   "duration": 5
+  },
+  {
+   "kind": "servers",
+   "stand": {
+    "x": 40,
+    "y": 31
+   },
+   "facing": "up",
+   "fx": {
+    "x": 40,
+    "y": 31
+   },
+   "duration": 5
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 8,
+    "y": 7
+   },
+   "facing": "down",
+   "fx": {
+    "x": 8,
+    "y": 7
+   },
+   "duration": 5
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 40,
+    "y": 4
+   },
+   "facing": "down",
+   "fx": {
+    "x": 40,
+    "y": 4
+   },
+   "duration": 5
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 7,
+    "y": 16
+   },
+   "facing": "down",
+   "fx": {
+    "x": 7,
+    "y": 16
+   },
+   "duration": 5
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 40,
+    "y": 17
+   },
+   "facing": "down",
+   "fx": {
+    "x": 40,
+    "y": 17
+   },
+   "duration": 5
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 6,
+    "y": 29
+   },
+   "facing": "down",
+   "fx": {
+    "x": 6,
+    "y": 29
+   },
+   "duration": 5
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 23,
+    "y": 9
+   },
+   "facing": "up",
+   "fx": {
+    "x": 23,
+    "y": 9
+   },
+   "duration": 5
+  },
+  {
+   "kind": "meet",
+   "stand": {
+    "x": 24,
+    "y": 17
+   },
+   "facing": "down",
+   "fx": {
+    "x": 24,
+    "y": 17
+   },
+   "duration": 7,
+   "godOnly": true
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 9,
+    "y": 7
+   },
+   "facing": "down",
+   "fx": {
+    "x": 9,
+    "y": 7
+   },
+   "duration": 5,
+   "godOnly": true
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 39,
+    "y": 4
+   },
+   "facing": "down",
+   "fx": {
+    "x": 39,
+    "y": 4
+   },
+   "duration": 5,
+   "godOnly": true
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 8,
+    "y": 16
+   },
+   "facing": "down",
+   "fx": {
+    "x": 8,
+    "y": 16
+   },
+   "duration": 5,
+   "godOnly": true
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 39,
+    "y": 17
+   },
+   "facing": "down",
+   "fx": {
+    "x": 39,
+    "y": 17
+   },
+   "duration": 5,
+   "godOnly": true
+  },
+  {
+   "kind": "sync",
+   "stand": {
+    "x": 8,
+    "y": 29
+   },
+   "facing": "down",
+   "fx": {
+    "x": 8,
+    "y": 29
+   },
+   "duration": 5,
+   "godOnly": true
+  },
+  {
+   "kind": "servers",
+   "stand": {
+    "x": 38,
+    "y": 31
+   },
+   "facing": "up",
+   "fx": {
+    "x": 38,
+    "y": 31
+   },
+   "duration": 5,
+   "godOnly": true
+  }
+ ],
+ "stations": {
+  "shelf": [
+   {
+    "stand": {
+     "x": 11,
+     "y": 3
+    },
+    "facing": "right"
+   },
+   {
+    "stand": {
+     "x": 2,
+     "y": 16
+    },
+    "facing": "up"
+   },
+   {
+    "stand": {
+     "x": 3,
+     "y": 16
+    },
+    "facing": "up"
+   },
+   {
+    "stand": {
+     "x": 36,
+     "y": 22
+    },
+    "facing": "left"
+   },
+   {
+    "stand": {
+     "x": 26,
+     "y": 28
+    },
+    "facing": "up"
+   }
+  ],
+  "terminal": [
+   {
+    "stand": {
+     "x": 7,
+     "y": 6
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 11,
+     "y": 6
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 5,
+     "y": 10
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 9,
+     "y": 10
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 42,
+     "y": 6
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 39,
+     "y": 10
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 45,
+     "y": 10
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 20,
+     "y": 6
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 26,
+     "y": 6
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 20,
+     "y": 10
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 26,
+     "y": 10
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 10,
+     "y": 18
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 7,
+     "y": 22
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 42,
+     "y": 18
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 39,
+     "y": 22
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 45,
+     "y": 22
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 10,
+     "y": 30
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 7,
+     "y": 34
+    },
+    "facing": "up",
+    "sit": true
+   }
+  ],
+  "web": [
+   {
+    "stand": {
+     "x": 4,
+     "y": 18
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 10,
+     "y": 18
+    },
+    "facing": "up",
+    "sit": true
+   },
+   {
+    "stand": {
+     "x": 7,
+     "y": 22
+    },
+    "facing": "up",
+    "sit": true
+   }
+  ],
+  "board": [
+   {
+    "stand": {
+     "x": 26,
+     "y": 15
+    },
+    "facing": "up"
+   },
+   {
+    "stand": {
+     "x": 27,
+     "y": 15
+    },
+    "facing": "up"
+   },
+   {
+    "stand": {
+     "x": 22,
+     "y": 17
+    },
+    "facing": "down"
+   },
+   {
+    "stand": {
+     "x": 25,
+     "y": 17
+    },
+    "facing": "down"
+   }
+  ],
+  "mcp": [
+   {
+    "stand": {
+     "x": 36,
+     "y": 31
+    },
+    "facing": "up"
+   },
+   {
+    "stand": {
+     "x": 38,
+     "y": 31
+    },
+    "facing": "up"
+   },
+   {
+    "stand": {
+     "x": 40,
+     "y": 31
+    },
+    "facing": "up"
+   },
+   {
+    "stand": {
+     "x": 42,
+     "y": 31
+    },
+    "facing": "up"
+   }
+  ],
+  "mailbox": [
+   {
+    "stand": {
+     "x": 22,
+     "y": 28
+    },
+    "facing": "down"
+   }
+  ]
+ },
+ "signs": [
+  {
+   "id": "lead",
+   "title": "LEAD",
+   "subtitle": "COMMAND CENTER",
+   "x": 24,
+   "y": 1.05
+  },
+  {
+   "id": "coder",
+   "title": "CODER",
+   "subtitle": "ENGINEERING",
+   "x": 7.5,
+   "y": 1.05
+  },
+  {
+   "id": "design",
+   "title": "DESIGN",
+   "subtitle": "DESIGN STUDIO",
+   "x": 40.5,
+   "y": 1.05
+  },
+  {
+   "id": "rag",
+   "title": "RAG",
+   "subtitle": "RESEARCH",
+   "x": 7.5,
+   "y": 13.05
+  },
+  {
+   "id": "meeting",
+   "title": "MEETING",
+   "subtitle": "CONFERENCE",
+   "x": 22.5,
+   "y": 15.15
+  },
+  {
+   "id": "qa",
+   "title": "QA",
+   "subtitle": "REVIEW & TESTING",
+   "x": 40.5,
+   "y": 13.05
+  },
+  {
+   "id": "launch",
+   "title": "LAUNCH",
+   "subtitle": "MARKETING",
+   "x": 7.5,
+   "y": 25.05
+  },
+  {
+   "id": "lounge",
+   "title": "LOUNGE",
+   "subtitle": "BREAK AREA",
+   "x": 21,
+   "y": 25.05
+  },
+  {
+   "id": "servers",
+   "title": "SERVERS",
+   "subtitle": "INFRASTRUCTURE",
+   "x": 40.5,
+   "y": 25.05
+  },
+  {
+   "id": "entry",
+   "title": "ULTRON",
+   "subtitle": "RECEPTION / ENTRY",
+   "x": 23,
+   "y": 33.2
+  }
+ ],
+ "doorways": [
+  {
+   "orient": "v",
+   "x": 14,
+   "y": 9,
+   "len": 2
+  },
+  {
+   "orient": "v",
+   "x": 14,
+   "y": 19,
+   "len": 2
+  },
+  {
+   "orient": "v",
+   "x": 14,
+   "y": 31,
+   "len": 2
+  },
+  {
+   "orient": "v",
+   "x": 33,
+   "y": 9,
+   "len": 2
+  },
+  {
+   "orient": "v",
+   "x": 33,
+   "y": 19,
+   "len": 2
+  },
+  {
+   "orient": "v",
+   "x": 33,
+   "y": 28,
+   "len": 2
+  },
+  {
+   "orient": "v",
+   "x": 18,
+   "y": 19,
+   "len": 2
+  },
+  {
+   "orient": "v",
+   "x": 29,
+   "y": 19,
+   "len": 2
+  },
+  {
+   "orient": "h",
+   "x": 23,
+   "y": 12,
+   "len": 2,
+   "thick": 3
+  },
+  {
+   "orient": "h",
+   "x": 23,
+   "y": 24,
+   "len": 2,
+   "thick": 3
+  },
+  {
+   "orient": "h",
+   "x": 23,
+   "y": 37,
+   "len": 2,
+   "thick": 1
+  }
+ ]
+}

@@ -3,7 +3,7 @@
 
 const CONFIG = {
   // AWS Endpoints (Backend)
-  API_BASE_URL: 'https://34gffaaf1a.execute-api.us-west-2.amazonaws.com/dev',
+  API_BASE_URL: 'https://hdnq75ygs3.execute-api.us-west-2.amazonaws.com/Prod',
   WS_BASE_URL: 'wss://34gffaaf1a.execute-api.us-west-2.amazonaws.com/dev',
 
   // Project ID

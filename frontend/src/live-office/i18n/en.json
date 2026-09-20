@@ -1,0 +1,98 @@
+{
+  "office": {
+    "gpuError": "The office floor lost its GPU context.\n\nReload the page to bring the Ultron floor back.",
+    "errand": {
+      "water": [
+        "watering the plants 🌿",
+        "giving the plants a drink",
+        "they grow so fast"
+      ],
+      "window": [
+        "letting some air in 🍃",
+        "a bit of fresh air",
+        "nice breeze today"
+      ],
+      "dispenser": [
+        "getting some water 💧",
+        "hydration break",
+        "staying sharp"
+      ],
+      "fridge": [
+        "anything good in the fridge?",
+        "who took my yogurt?",
+        "just looking…"
+      ],
+      "shelf": [
+        "checking out the shelf 📚",
+        "anything new in here?",
+        "so much good stuff"
+      ],
+      "bin": [
+        "out with the scrap paper 🗑️",
+        "desk cleanup day",
+        "tidying up a little"
+      ],
+      "smoke": [
+        "the floor runs itself ☕",
+        "lead break.",
+        "thinking big thoughts ☕",
+        "stepping out for air"
+      ],
+      "meet": [
+        "syncing up in the meeting room",
+        "reviewing the plan on the board",
+        "quick stand-up, sitting down"
+      ],
+      "servers": [
+        "checking on the racks",
+        "all nodes green",
+        "listening to the fans hum"
+      ],
+      "sync": [
+        "syncing with the team",
+        "dropping by for a quick chat",
+        "comparing notes"
+      ]
+    },
+    "suckUp": [
+      "already shipped {{done}} tasks, chief. raise? 🥺",
+      "{{done}} tasks done this week, chief!",
+      "great plan as always, chief!",
+      "I was JUST about to do exactly that!",
+      "love the roadmap today, chief",
+      "working hard, chief! 💪",
+      "best lead agent ever. genuinely."
+    ],
+    "gossip": [
+      "has the lead ever actually written code?",
+      "another 'quick sync' that took an hour…",
+      "he pinned MY task as his idea",
+      "did you see the DAG he drew? it's a circle",
+      "he re-planned the sprint. again.",
+      "the roadmap changed. mid-coffee.",
+      "'just a small change' — it was 14 files"
+    ],
+    "cheer": [
+      "done! ✔",
+      "nailed it",
+      "that's a wrap",
+      "ship it 🚀",
+      "another one done",
+      "crushed it",
+      "in the books"
+    ],
+    "mugs": {
+      "empty": "no clean mugs left…",
+      "brewing": "brewing a fresh one ☕",
+      "washing": "washing the mug"
+    },
+    "activity": {
+      "waiting": "waiting",
+      "needsYou": "needs you",
+      "compacting": "compacting context",
+      "looping": "looping — breaker armed",
+      "runningFloor": "running the floor",
+      "idle": "idle"
+    }
+  }
+}
