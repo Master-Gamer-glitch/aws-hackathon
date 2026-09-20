@@ -36,10 +36,16 @@ export interface BackendTask {
 
 export interface DeviceCapabilities {
   platform?: string;
+  arch?: string;
   cpuCount?: number;
+  cpuModel?: string;
   memTotalGb?: string | number;
+  memFreeGb?: string | number;
   tools: string[];
   benchScore?: number;
+  nodeVersion?: string;
+  /** true when the device measured itself (a worker); false/absent when the Lambda measured itself */
+  reportedByDevice?: boolean;
 }
 
 export interface RoomDevice {
@@ -50,6 +56,8 @@ export interface RoomDevice {
   capabilities?: DeviceCapabilities;
   lastHeartbeat?: number;
   offlineSince?: number;
+  /** what the device reported in its last heartbeat (real load, and the task it is building) */
+  metrics?: { cpuUsage?: number; memUsage?: number; activeTaskCount?: number; activeTaskId?: string } | null;
 }
 
 export interface RoomStatus {

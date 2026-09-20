@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { airstream, ApiError, type BackendTask, type RoomStatus } from "@/lib/airstream/api";
 import { HEARTBEAT_INTERVAL_MS, PROJECT_ID } from "@/lib/airstream/config";
+import { saveRoom } from "@/lib/airstream/rooms";
 import { connectAirstream, type AirstreamEvent, type SocketState } from "@/lib/airstream/socket";
 import { cn } from "@/lib/utils";
 
@@ -129,6 +130,7 @@ export default function AirstreamConsole() {
   };
 
   const enter = (s: Session) => {
+    saveRoom({ roomId: s.roomId, name: s.name, role: s.role });
     store.set(SESSION_KEY, JSON.stringify(s));
     store.set(NAME_KEY, s.name);
     setSession(s);
@@ -204,7 +206,7 @@ export default function AirstreamConsole() {
     <div className="min-h-screen bg-crew-bg text-crew-text font-sans">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-crew-border bg-crew-surface px-6 py-4">
         <div className="flex items-center gap-4">
-          <Link href="/office" className="font-mono text-xs text-crew-text-muted hover:text-crew-text">← OFFICE</Link>
+          <Link href={session ? `/office?room=${encodeURIComponent(session.roomId)}` : "/office"} className="font-mono text-xs text-crew-text-muted hover:text-crew-text">← OFFICE</Link>
           <h1 className="font-display text-xl font-semibold">Airstream</h1>
           <span className="rounded border border-crew-border px-2 py-0.5 font-mono text-[11px] text-crew-text-secondary">
             {PROJECT_ID}

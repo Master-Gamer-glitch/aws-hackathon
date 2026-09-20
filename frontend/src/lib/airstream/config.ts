@@ -23,16 +23,10 @@ export const WS_BASE_URL = (
 
 export const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || 'proj_demo';
 
-/**
- * When true the office floor shows the real backend task ledger instead of the
- * built-in simulation. Off by default so the UI still demos without a backend.
- */
-export const LIVE_BACKEND = process.env.NEXT_PUBLIC_LIVE_BACKEND === 'true';
-
 /** Slave devices must heartbeat well inside the backend's 30s offline threshold. */
 export const HEARTBEAT_INTERVAL_MS = 8_000;
 
-/** How often the live ledger re-reads tasks when no WebSocket event nudges it sooner. */
-export const LEDGER_POLL_MS = 5_000;
+/** How often a watched room re-reads its devices and tasks when no live event nudges it sooner. */
+export const ROOM_POLL_MS = 3_000;
 
 export const WS_RECONNECT_MS = 3_000;

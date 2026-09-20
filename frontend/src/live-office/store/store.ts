@@ -231,6 +231,12 @@ interface State {
   pushFeed: (id: string, line: string) => void;
   addAgent: (agent: Agent) => void;
   removeAgent: (id: string) => void;
+  /** LIVE MODE: replace the whole roster with a backend room's devices and stop persisting it. */
+  enterLiveRoster: (agents: Agent[]) => void;
+  /** LIVE MODE: replace the roster in place (membership or descriptors changed). Keeps the selection if it still exists. */
+  setLiveAgents: (agents: Agent[]) => void;
+  /** Leave live mode: persistence back on, roster restored from what the demo had saved. */
+  leaveLiveRoster: () => void;
   /** Archive an agent (its terminal was closed): move it from the active roster
    *  into `archivedAgents` with its PTY cleared. Retained + flagged, NOT deleted. */
   archiveAgent: (id: string) => void;
@@ -412,6 +418,12 @@ const rosterMirror: {
   selectedId: string | null;
 } = { agents: [], archived: [], restorable: [], queues: {}, selectedId: null };
 
+// LIVE MODE swaps the roster for the real devices of a backend room. Those must never be
+// written over the demo's saved roster (localStorage / roster file), or the next demo load
+// would boot with real devices in it. While off, every roster persist* below is a no-op.
+let rosterPersistence = true;
+export function setRosterPersistence(on: boolean): void { rosterPersistence = on; }
+
 let rosterFlush: ReturnType<typeof setTimeout> | null = null;
 
 function flushRosterNow(): void {
@@ -451,6 +463,7 @@ function slimAgents(agents: Agent[]): PersistedAgent[] {
 }
 
 function persistAgents(agents: Agent[], selectedId: string | null): void {
+  if (!rosterPersistence) return;
   const slim = slimAgents(agents);
   try {
     window.localStorage.setItem(LS_AGENTS, JSON.stringify(slim));
@@ -517,6 +530,7 @@ function loadPersistedAgents(): Agent[] {
 }
 
 function persistArchived(archived: Agent[]): void {
+  if (!rosterPersistence) return;
   const slim = slimAgents(archived);
   try {
     window.localStorage.setItem(LS_ARCHIVED, JSON.stringify(slim));
@@ -544,6 +558,7 @@ function loadPersistedArchived(): Agent[] {
 }
 
 function persistRestorable(restorable: Agent[]): void {
+  if (!rosterPersistence) return;
   // Keeps contextTokens/contextLimit, unlike the other two: a restorable entry
   // is a spawn recipe for a session that has not been re-entered yet, so its
   // last known context size is still meaningful.
@@ -575,6 +590,7 @@ function loadPersistedRestorable(): Agent[] {
 }
 
 function persistQueues(queues: Record<string, QueuedMessage[]>): void {
+  if (!rosterPersistence) return;
   try {
     // Only keep non-empty queues so the key stays small.
     const slim: Record<string, QueuedMessage[]> = {};
@@ -766,6 +782,32 @@ export const useStore = create<State>((set, get) => ({
   pushFeed: (id, line) =>
     // capped so a long-running floor never grows the feed without bound
     set((s) => ({ feeds: { ...s.feeds, [id]: [...(s.feeds[id] ?? []), line].slice(-400) } })),
+  enterLiveRoster: (agents) => {
+    setRosterPersistence(false);
+    set({
+      agents, archivedAgents: [], restorableAgents: [],
+      selectedId: agents[0]?.id ?? null,
+      feeds: {}, messageQueues: {}, toolCounts: {},
+      fullscreenAgentId: null, taskDetailId: null,
+    });
+  },
+  setLiveAgents: (agents) =>
+    set((s) => ({
+      agents,
+      selectedId: agents.some((a) => a.id === s.selectedId) ? s.selectedId : (agents[0]?.id ?? null),
+    })),
+  leaveLiveRoster: () => {
+    setRosterPersistence(true);
+    const agents = loadPersistedAgents();
+    set({
+      agents,
+      archivedAgents: loadPersistedArchived(),
+      restorableAgents: loadPersistedRestorable(),
+      selectedId: loadPersistedSelectedId(agents),
+      feeds: {}, messageQueues: loadPersistedQueues(), toolCounts: {},
+      fullscreenAgentId: null, taskDetailId: null,
+    });
+  },
   addAgent: (agent) =>
     set((s) => {
       // Idempotent by id: a MAIN-initiated spawn broadcast (hive:agentSpawned, e.g.

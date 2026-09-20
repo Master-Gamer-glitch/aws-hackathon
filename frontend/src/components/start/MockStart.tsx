@@ -30,7 +30,10 @@ interface WorkspaceConfig {
   agentsCount?: number;
 }
 
-export default function StartPage() {
+// DEMO ONLY. This is the frontend team's mock onboarding: the workspaces, paths, agent counts and
+// sign-in are made-up data that show how the product would look. The real screen is
+// components/airstream/RoomPicker.tsx; this one is shown under the "See how it works" tab.
+export default function MockStart() {
   const router = useRouter();
 
   // Screen View:
@@ -119,7 +122,7 @@ export default function StartPage() {
       /* ignore */
     }
     setTimeout(() => {
-      router.push("/office");
+      router.push("/office?mode=demo");
     }, 350);
   };
 
@@ -136,7 +139,7 @@ export default function StartPage() {
     } catch {
       /* ignore */
     }
-    router.push("/office");
+    router.push("/office?mode=demo");
   };
 
   return (

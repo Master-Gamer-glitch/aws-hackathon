@@ -1,29 +1,29 @@
-// Boots the live office runtime: the host bridge, the agent activity loop and the
-// task ledger. Returns a disposer so React effects can tear everything down (no
-// timers survive unmount).
+// Boots the office runtime for one of its two modes.
 //
-// Two modes:
-//  - simulated (default): a synthetic event stream + mock ledger keep the floor moving
-//    with no backend. Good for demos and UI work.
-//  - live (NEXT_PUBLIC_LIVE_BACKEND=true): the floor reflects the Airstream backend's
-//    real task ledger and WebSocket events; the simulation stays off.
+//  - DEMO ("See how it works"): a synthetic event stream and a mock task ledger keep the floor
+//    moving with no backend, so anyone can see what the product does. Nothing here is real.
+//  - LIVE: nothing is simulated. The floor shows the real devices, tasks and events of a backend
+//    room; see components/office/live/ for that side.
+//
+// Both return a disposer so React effects can tear everything down (no timers survive unmount).
 
 import './i18n';
-import { LIVE_BACKEND } from '@/lib/airstream/config';
 import { installHostBridge } from './bridge/initCth';
-import { startLiveLedger } from './bridge/liveLedger';
 import { startMockLedger, stopMockLedger } from './bridge/mockLedger';
 import { startMockLoop, stopMockLoop } from './store/mockEvents';
 
-export function startLiveOffice(): () => void {
+/** Simulated office (demo tab). */
+export function startDemoOffice(): () => void {
   installHostBridge();
-
-  if (LIVE_BACKEND) return startLiveLedger();
-
   startMockLedger();
   startMockLoop();
   return () => {
     stopMockLoop();
     stopMockLedger();
   };
+}
+
+/** Real office (live tab): only the bridge the scene needs. No simulation is started. */
+export function startLiveRuntime(): void {
+  installHostBridge();
 }

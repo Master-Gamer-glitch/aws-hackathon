@@ -49,7 +49,7 @@ import { AddAgentModal, type NewAgentData } from "./AddAgentModal";
 import { OfficeFloor } from "@office/scene/office/OfficeFloor";
 import { useStore, type Agent } from "@office/store/store";
 import type { StatusKind } from "@office/store/statusKind";
-import { startLiveOffice } from "@office/runtime";
+import { startDemoOffice } from "@office/runtime";
 import { metaFor, type CrewMeta } from "@office/crewdesk/roster";
 import {
   getLedger,
@@ -485,7 +485,7 @@ export default function OfficeWorkspace() {
 
   // Boot the runtime (host bridge + agent activity loop + task ledger). The disposer
   // clears every timer, so nothing keeps running after the page unmounts.
-  useEffect(() => startLiveOffice(), []);
+  useEffect(() => startDemoOffice(), []);
 
   // Auto mode: blocked agents get approved automatically.
   useEffect(() => setAutoApprove(autoMode), [autoMode]);

@@ -22,7 +22,7 @@ export default function AgentTabClient() {
         router.push(`/agent/${newTab}`);
       }}
       onExitFocusMode={() => {
-        router.push("/office");
+        router.push("/office?mode=demo");
       }}
     />
   );

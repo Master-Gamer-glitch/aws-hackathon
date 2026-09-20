@@ -13,14 +13,17 @@ npm run dev                  # http://localhost:3000
 
 Node server: `npm run build && npm start`. Hosted build: see "Hosting" below.
 
-## Routes
+## Screens
 
-| Route | What it is |
-|---|---|
-| `/` | Marketing / scroll experience |
-| `/office` | Live office floor (PixiJS) with mission-control sidebar |
-| `/airstream` | Device rooms: create/join, heartbeat, distribute → collect → demo, live event feed |
-| `/prototype`, `/start`, `/agent/*` | UI prototype and onboarding |
+Every app screen has a small floating tab: **Live** (default, real data) and **See how it works** (the frontend
+team's simulated demo, with made-up data, labelled "simulated data"). The mode is in the URL (`?mode=demo`).
+
+| Route | Live tab | See how it works tab |
+|---|---|---|
+| `/start` | Your rooms: create a room, open one by id, live state of each room you know | The original mock workspace picker and sign-in |
+| `/office?room=<id>` | The office floor for one backend room: real devices as characters, real tasks, real events | The simulated office with the fake crew, terminal and devices |
+| `/airstream` | Console for one room: create/join, heartbeat, distribute, collect, demo, task list, event feed | n/a |
+| `/`, `/prototype`, `/agent/*` | Marketing page; UI prototypes (all made-up data) | |
 
 ## Backend integration
 
@@ -34,18 +37,22 @@ src/live-office/bridge/
 src/components/airstream/AirstreamConsole.tsx   the /airstream page
 ```
 
-### Two modes for the office floor
+### The live office
 
-- **Simulated** (`NEXT_PUBLIC_LIVE_BACKEND` unset/false): built-in mock events and ledger. No backend needed.
-- **Live** (`NEXT_PUBLIC_LIVE_BACKEND=true`): the floor shows the real task list from `GET /projects/{id}/tasks`,
-  refreshed every 5s and immediately on `task.*`, `tasks.*`, `code.*`, `demo.*`, `status.*` events. The simulation is off,
-  so an empty backend means an idle floor.
+`components/office/live/` is the real office. It watches one room (`useRoom`: devices and tasks polled every 3 s, plus the
+WebSocket event stream, which triggers an immediate re-read) and pushes it into the same PixiJS floor the demo uses:
 
-Backend task state maps to card state: `ready`→todo, `leased/submitted/verifying`→doing, `committed`→done,
-`failed`→blocked (acknowledging it archives the card; there is nothing to approve server-side).
-A card animates a character only when the backend names an agent id that exists on the roster
-(`ownerAgent`, `leaseOwner` or `resultDeviceId`). Tasks are owned by devices, so most cards show without an assignee.
-Messages typed into the office queue stay local — the backend has no "add card" endpoint (`POST /outcomes` runs the lead agent on Bedrock).
+- **Devices are the characters.** The master device is the boss in the Command Center; every worker gets a desk.
+  Roster, device strip and device panel show what each device reported when it joined (platform, cores, RAM, tools) and its
+  live CPU/RAM load from its heartbeats. A device that stops heartbeating turns offline.
+- **What a character is doing comes from the tasks**, on every poll (`live-office/bridge/liveRoster.ts`): a worker is
+  "building" the task it reports in its heartbeat, "assigned" for other tasks it holds, idle otherwise. The master is
+  coordinating while tasks are open, and shows collect and demo as they run.
+- **Tasks** reach the wall boards through `bridge/liveLedger.ts`. **Events** are the backend's WebSocket messages.
+- The Room tab says what the next step is for the room's current state, with the worker command to run when it needs one.
+
+Live mode and the demo share one store. Entering live mode swaps in the room's devices and switches roster persistence
+off, so real devices never overwrite the demo's saved roster; leaving restores it (`enterLiveRoster` / `leaveLiveRoster`).
 
 ### Two different APIs, two URLs
 
@@ -77,8 +84,8 @@ SKIP_BUILD=1 ./deploy.sh   # re-publish the existing ./out
 
 The hosted build is `STATIC_EXPORT=true` (`output: "export"`), so there is no Node server and no `/api/airstream` proxy.
 The browser calls the REST API directly, which works because the Lambdas now return CORS headers on real responses.
-The script bakes `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_WS_BASE_URL`, `NEXT_PUBLIC_PROJECT_ID` and
-`NEXT_PUBLIC_LIVE_BACKEND` into the bundle; override any of them in the environment before running it.
+The script bakes `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_WS_BASE_URL` and `NEXT_PUBLIC_PROJECT_ID` into the bundle;
+override any of them in the environment before running it.
 
 CloudFront is not used: this AWS account has to be verified by AWS Support before it can create CloudFront resources.
 Amplify serves over HTTPS without that. If the account is verified later, S3 + CloudFront is a drop-in alternative

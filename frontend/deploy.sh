@@ -16,7 +16,6 @@ BRANCH="${AMPLIFY_BRANCH:-main}"
 export NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-https://hdnq75ygs3.execute-api.us-west-2.amazonaws.com/Prod}"
 export NEXT_PUBLIC_WS_BASE_URL="${NEXT_PUBLIC_WS_BASE_URL:-wss://34gffaaf1a.execute-api.us-west-2.amazonaws.com/dev}"
 export NEXT_PUBLIC_PROJECT_ID="${NEXT_PUBLIC_PROJECT_ID:-proj_demo}"
-export NEXT_PUBLIC_LIVE_BACKEND="${NEXT_PUBLIC_LIVE_BACKEND:-true}"
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 AWS=(aws --profile "$PROFILE" --region "$REGION")
