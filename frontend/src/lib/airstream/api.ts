@@ -20,6 +20,18 @@ export interface BackendTask {
   ownerAgent?: string | null;
   budget: { usd?: number } | null;
   resultDeviceId: string | null;
+  /** set for tasks planned for a specific room (via /plan); absent for project-level tasks */
+  roomId?: string | null;
+  planId?: string | null;
+  createdAt?: number | null;
+  contract?: {
+    objective: string;
+    expectedOutput: string;
+    successCriteria: string[];
+    /** paths this task owns */
+    files?: string[];
+    notes?: string;
+  } | null;
 }
 
 export interface DeviceCapabilities {
@@ -68,6 +80,9 @@ export interface RoomStatus {
     outputTail?: string;
   } | null;
   masterDir: string | null;
+  /** the current plan for this room, and the outcome it was made for */
+  planId?: string | null;
+  outcome?: string | null;
 }
 
 export interface CreateRoomResult { roomId: string; masterId: string; message: string }

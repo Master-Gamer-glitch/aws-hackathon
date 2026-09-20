@@ -117,7 +117,7 @@ function reflectOnAgent(agentId: string, taskId: string, title: string, s: Ledge
 // ── loop ─────────────────────────────────────────────────────────────────────
 
 /** WebSocket event types after which the task list is worth re-reading right away. */
-const TASK_EVENTS = /^(task\.|tasks\.|code\.|demo\.|status\.)/;
+const TASK_EVENTS = /^(plan\.|task\.|tasks\.|code\.|demo\.|status\.)/;
 
 export function startLiveLedger(): () => void {
   setLedgerLive(true);

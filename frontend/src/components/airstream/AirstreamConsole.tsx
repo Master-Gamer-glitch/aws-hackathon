@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { airstream, ApiError, type RoomStatus } from "@/lib/airstream/api";
+import { airstream, ApiError, type BackendTask, type RoomStatus } from "@/lib/airstream/api";
 import { HEARTBEAT_INTERVAL_MS, PROJECT_ID } from "@/lib/airstream/config";
 import { connectAirstream, type AirstreamEvent, type SocketState } from "@/lib/airstream/socket";
 import { cn } from "@/lib/utils";
@@ -53,6 +53,7 @@ export default function AirstreamConsole() {
   const [name, setName] = useState("My Browser");
   const [joinId, setJoinId] = useState("");
   const [room, setRoom] = useState<RoomStatus | null>(null);
+  const [tasks, setTasks] = useState<BackendTask[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [socket, setSocket] = useState<SocketState>("closed");
@@ -85,13 +86,19 @@ export default function AirstreamConsole() {
 
   // room status polling + heartbeat while in a room
   useEffect(() => {
-    if (!session) { setRoom(null); return; }
+    if (!session) { setRoom(null); setTasks([]); return; }
     let stopped = false;
 
     const refresh = async () => {
       try {
-        const r = await airstream.roomStatus(session.roomId);
-        if (!stopped) { setRoom(r); setError(null); }
+        const [r, all] = await Promise.all([airstream.roomStatus(session.roomId), airstream.listTasks()]);
+        if (!stopped) {
+          setRoom(r);
+          // this room's current plan, plus project-level tasks that belong to no room
+          setTasks(all.filter((t) => !t.roomId || (t.roomId === session.roomId && (!r.planId || t.planId === r.planId)))
+            .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0)));
+          setError(null);
+        }
       } catch (e) {
         if (!stopped) setError(errText(e));
       }
@@ -182,6 +189,13 @@ export default function AirstreamConsole() {
     try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }
     catch { window.prompt("Copy this link", link); }
   };
+
+  const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
+  const copyCmd = async (cmd: string) => {
+    try { await navigator.clipboard.writeText(cmd); setCopiedCmd(cmd); setTimeout(() => setCopiedCmd(null), 1500); }
+    catch { window.prompt("Copy this command", cmd); }
+  };
+  const deviceName = (id: string | null) => room?.deviceStats.devices.find((d) => d.deviceId === id)?.name ?? id;
 
   const isMaster = session?.role === "master";
   const progress = room ? pct(room.taskStats.progress) : 0;
@@ -326,6 +340,65 @@ export default function AirstreamConsole() {
                       </pre>
                     )}
                   </div>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-crew-border bg-crew-card p-6">
+                <h2 className="mb-1 text-sm font-semibold">Do the work</h2>
+                <p className="mb-3 text-xs text-crew-text-muted">
+                  Tasks are done by a worker running on a real machine with its own agent CLI. A browser tab cannot run one,
+                  so this tab only shows presence. Run these in a terminal from the repo root.
+                </p>
+                <div className="space-y-2">
+                  {(isMaster
+                    ? [
+                        { label: "1. Plan (once, on the master)", cmd: `node worker/device-worker.mjs plan "describe what to build" --room ${session.roomId}` },
+                        { label: "2. Start a worker (every device that should help)", cmd: `node worker/device-worker.mjs run --room ${session.roomId}` },
+                        { label: "3. Then use Distribute, Collect and Run demo above", cmd: "" },
+                      ]
+                    : [{ label: "Start a worker on this machine", cmd: `node worker/device-worker.mjs run --room ${session.roomId}` }]
+                  ).map((row) => (
+                    <div key={row.label}>
+                      <div className="mb-1 text-[11px] text-crew-text-secondary">{row.label}</div>
+                      {row.cmd && (
+                        <div className="flex items-start gap-2 rounded-md bg-crew-surface px-3 py-2">
+                          <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-crew-text">{row.cmd}</code>
+                          <button onClick={() => copyCmd(row.cmd)} className="shrink-0 rounded border border-crew-border-strong px-2 py-0.5 text-[11px] hover:bg-crew-hover">
+                            {copiedCmd === row.cmd ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-crew-border bg-crew-card p-6">
+                <h2 className="mb-1 text-sm font-semibold">Tasks</h2>
+                {room?.outcome && <p className="mb-3 text-xs text-crew-text-muted">Outcome: {room.outcome}</p>}
+                {tasks.length === 0 ? (
+                  <p className="text-sm text-crew-text-muted">No tasks yet. Plan an outcome to create some.</p>
+                ) : (
+                  <ul className="divide-y divide-crew-border">
+                    {tasks.map((t) => {
+                      const tone = t.state === "committed" ? "text-crew-success"
+                        : t.state === "failed" ? "text-crew-error"
+                        : t.state === "ready" ? "text-crew-text-muted" : "text-crew-warning";
+                      const who = deviceName(t.resultDeviceId ?? t.leaseOwner);
+                      return (
+                        <li key={t.taskId} className="py-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="min-w-0 text-sm">{t.objective ?? t.taskId}</span>
+                            <span className={cn("shrink-0 font-mono text-[11px] uppercase", tone)}>{t.state}</span>
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[11px] text-crew-text-muted">
+                            {t.contract?.files && t.contract.files.length > 0 && <span>{t.contract.files.join(", ")}</span>}
+                            {who && <span>{who}</span>}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
               </section>
 
