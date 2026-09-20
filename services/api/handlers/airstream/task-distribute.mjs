@@ -8,6 +8,7 @@ import { TABLES } from '../../schema.mjs';
 import broadcast, { events } from '../../lib/broadcast.mjs';
 import { withCors } from '../../lib/cors.mjs';
 import { tasksForRoom } from '../../lib/contracts.mjs';
+import { effectiveStatus } from '../../lib/devices.mjs';
 
 function calculateTaskFitScore(device, task) {
   if (!device.capabilities || device.status !== 'online') return -1;
@@ -81,8 +82,9 @@ async function distributeTasksInRoom(roomId) {
       }
     });
 
+    // a worker that stopped heartbeating is not online, even if nothing has swept its status yet
     const onlineDevices = devices.filter(d =>
-      d.status === 'online' && !d.isMaster
+      effectiveStatus(d) === 'online' && !d.isMaster
     );
 
     if (onlineDevices.length === 0) {

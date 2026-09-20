@@ -36,7 +36,8 @@ node worker/device-worker.mjs demo --room <roomId>
 
 1. **Joins** and reports its own hardware and tools (`node`, `python`, `docker`, `claude`, …). Distribution scores devices
    on what they report, so tasks that need a tool go to a device that has it.
-2. **Heartbeats** every 8 seconds. A device silent for 30 seconds is marked offline and its tasks are reassigned.
+2. **Heartbeats** every 8 seconds with its real CPU and memory load and the task it is building, so the room shows
+   "building" versus "assigned" and live load. A device silent for 30 seconds is marked offline and its tasks are reassigned.
 3. **Polls** for tasks leased to it. For each one it makes a scratch folder, asks the model to write the task's files
    there, reads them back and submits them. The scratch folder is deleted afterwards (`--keep-workdir` to inspect it).
 4. Files the task does not own are dropped, and a task whose required files are missing is retried once with feedback.

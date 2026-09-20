@@ -7,6 +7,7 @@ import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
 import broadcast, { events } from '../../lib/broadcast.mjs';
 import { withCors } from '../../lib/cors.mjs';
+import { sanitizeMetrics } from '../../lib/devices.mjs';
 
 const OFFLINE_THRESHOLD_MS = 30000; // 30 seconds
 const HEARTBEAT_CHECK_INTERVAL_MS = 5000; // Check every 5s
@@ -106,7 +107,7 @@ async function deviceHeartbeatHandlerImpl(event) {
       lastHeartbeat: now,
       status: 'online',
       offlineStartTime: null,
-      metrics,
+      metrics: sanitizeMetrics(metrics),
       expiresAt: now + 86400000
     });
 

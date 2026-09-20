@@ -225,7 +225,7 @@ const mockExecutor = {
     return { tasks: [mk('Entry point and package.json', ['package.json', 'index.js']), mk('Greeting module', ['lib/greet.js']), mk('Formatting module and README', ['lib/format.js', 'README.md'])], cost: 0 };
   },
   async execute({ task, workdir }) {
-    await sleep(300);
+    await sleep(parseInt(process.env.AIRSTREAM_MOCK_DELAY_MS || '300', 10) || 300); // slow it down to watch a task being built
     for (const rel of task.contract.files || []) {
       if (!(rel in MOCK_FILES)) throw new Error(`mock executor has no content for ${rel}`);
       await fs.mkdir(path.dirname(path.join(workdir, rel)), { recursive: true });
@@ -277,11 +277,23 @@ async function cmdRun(cfg, api) {
   const joined = await api.join(cfg.room, deviceId, cfg.name, caps);
   log(`joined room ${cfg.room} as "${cfg.name}" (${deviceId}); tools: ${joined.capabilities.tools.join(', ') || 'none'}; executor: ${cfg.executor}`);
 
-  let hbFailing = false;
-  const hb = setInterval(async () => {
-    try { await api.heartbeat(cfg.room, deviceId, { activeTaskCount: 0 }); hbFailing = false; }
+  // What this device is doing right now. Reported in every heartbeat so the room can tell "assigned"
+  // (leased to me, waiting its turn) from "building" (I am on it).
+  const state = { activeTaskId: null };
+  const beat = async () => {
+    const cores = os.cpus().length || 1;
+    const metrics = {
+      cpuUsage: Math.min(100, (os.loadavg()[0] / cores) * 100),
+      memUsage: (1 - os.freemem() / os.totalmem()) * 100,
+      activeTaskCount: state.activeTaskId ? 1 : 0,
+      ...(state.activeTaskId ? { activeTaskId: state.activeTaskId } : {}),
+    };
+    try { await api.heartbeat(cfg.room, deviceId, metrics); hbFailing = false; }
     catch (e) { if (!hbFailing) log(`heartbeat failed: ${e.message}`); hbFailing = true; }
-  }, HEARTBEAT_MS);
+  };
+  let hbFailing = false;
+  const hb = setInterval(beat, HEARTBEAT_MS);
+  void beat(); // so the room knows straight away, not 8 seconds from now
 
   let stopping = false;
   process.on('SIGINT', () => { if (stopping) process.exit(130); stopping = true; log('stopping after the current task (Ctrl-C again to force)…'); });
@@ -295,7 +307,7 @@ async function cmdRun(cfg, api) {
     let list;
     try { list = await api.tasks(); } catch (e) { log(`could not list tasks: ${e.message}`); await sleep(POLL_MS); continue; }
 
-    const inRoom = list.tasks.filter((t) => !t.roomId || t.roomId === cfg.room);
+    const inRoom = list.tasks.filter((t) => !t.roomId || t.roomId === cfg.room).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)); // plan order
     const mine = inRoom.find((t) => t.state === 'leased' && t.leaseOwner === deviceId && !handled.has(`${t.taskId}:${t.leaseEpoch}`));
 
     if (!mine) {
@@ -307,7 +319,13 @@ async function cmdRun(cfg, api) {
     handled.add(`${mine.taskId}:${mine.leaseEpoch}`);
     idleSince = Date.now();
     const plan = inRoom.filter((t) => t.planId === mine.planId && t.contract).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    if (await doTask({ cfg, api, executor, deviceId, task: mine, plan, outcome: list.outcome || '' })) finished++;
+    state.activeTaskId = mine.taskId;
+    void beat(); // say which task I am on now, not at the next heartbeat
+    try {
+      if (await doTask({ cfg, api, executor, deviceId, task: mine, plan, outcome: list.outcome || '' })) finished++;
+    } finally {
+      state.activeTaskId = null;
+    }
     idleSince = Date.now();
     if (cfg.maxTasks && finished >= cfg.maxTasks) { log(`finished ${finished} task(s), exiting`); break; }
   }

@@ -31,6 +31,16 @@ lead agent needs model access the account does not have). The worker's `plan` co
   Tasks with no `roomId` (made by the lead agent) still count for every room.
 - Distribute, collect and room status only look at the room's current plan.
 
+## Device liveness and heartbeat metrics
+
+`POST …/devices/{deviceId}/heartbeat` accepts `metrics`: `cpuUsage` and `memUsage` (0 to 100), `activeTaskCount`, and
+`activeTaskId` (the task the device is building right now). Anything else is dropped. Room status returns them per device.
+
+A worker holds every task distribute leased to it but builds one at a time, so `activeTaskId` is how a screen tells
+"building" from "assigned". Room status and distribute also derive a device's status from its last heartbeat
+(30 seconds of silence means offline), rather than trusting the stored value, which is only corrected when some other
+device heartbeats. The master is exempt: it is a browser or terminal that does not heartbeat.
+
 ## Devices report their own capabilities
 
 `POST …/rooms/{roomId}/devices` accepts `capabilities` (`platform`, `arch`, `cpuCount`, `memTotalGb`, `memFreeGb`,

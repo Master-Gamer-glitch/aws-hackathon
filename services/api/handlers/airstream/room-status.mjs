@@ -6,6 +6,7 @@ import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
 import { withCors } from '../../lib/cors.mjs';
 import { tasksForRoom } from '../../lib/contracts.mjs';
+import { effectiveStatus } from '../../lib/devices.mjs';
 
 async function roomStatusHandlerImpl(event) {
   const { projectId, roomId } = event.pathParameters;
@@ -28,17 +29,20 @@ async function roomStatusHandlerImpl(event) {
       }
     });
 
+    const now = Date.now();
+    const statusOf = (d) => effectiveStatus(d, now); // stale heartbeat means offline, whatever is stored
     const deviceStats = {
       total: devices.length,
-      online: devices.filter(d => d.status === 'online').length,
-      offline: devices.filter(d => d.status === 'offline').length,
+      online: devices.filter(d => statusOf(d) === 'online').length,
+      offline: devices.filter(d => statusOf(d) === 'offline').length,
       devices: devices.map(d => ({
         deviceId: d.deviceId,
         name: d.name,
-        status: d.status,
+        status: statusOf(d),
         isMaster: d.isMaster,
         capabilities: d.capabilities,
         lastHeartbeat: d.lastHeartbeat,
+        metrics: d.metrics || null,
         offlineSince: d.offlineStartTime
       }))
     };
