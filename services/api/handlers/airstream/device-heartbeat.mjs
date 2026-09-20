@@ -6,6 +6,7 @@
 import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
 import broadcast, { events } from '../../lib/broadcast.mjs';
+import { withCors } from '../../lib/cors.mjs';
 
 const OFFLINE_THRESHOLD_MS = 30000; // 30 seconds
 const HEARTBEAT_CHECK_INTERVAL_MS = 5000; // Check every 5s
@@ -93,7 +94,7 @@ async function redistributeTasks(roomId, offlineDeviceIds) {
   }
 }
 
-export async function deviceHeartbeatHandler(event) {
+async function deviceHeartbeatHandlerImpl(event) {
   const { projectId, roomId, deviceId } = event.pathParameters;
   const { status = 'ok', metrics = {} } = JSON.parse(event.body || '{}');
 
@@ -149,4 +150,5 @@ export async function deviceHeartbeatHandler(event) {
   }
 }
 
+export const deviceHeartbeatHandler = withCors(deviceHeartbeatHandlerImpl);
 export default deviceHeartbeatHandler;

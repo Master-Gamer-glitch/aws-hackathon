@@ -4,8 +4,9 @@
 
 import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
+import { withCors } from '../../lib/cors.mjs';
 
-export async function roomStatusHandler(event) {
+async function roomStatusHandlerImpl(event) {
   const { projectId, roomId } = event.pathParameters;
 
   try {
@@ -43,8 +44,8 @@ export async function roomStatusHandler(event) {
 
     // Get task stats
     const readyTasks = await db.query(TABLES.TASKS, {
-      indexName: 'StateIndex',
-      keyConditionExpression: 'projectId = :projectId AND #state = :state',
+      keyConditionExpression: 'projectId = :projectId',
+      filterExpression: '#state = :state',
       expressionAttributeNames: { '#state': 'state' },
       expressionAttributeValues: {
         ':projectId': projectId,
@@ -53,8 +54,8 @@ export async function roomStatusHandler(event) {
     });
 
     const leasedTasks = await db.query(TABLES.TASKS, {
-      indexName: 'StateIndex',
-      keyConditionExpression: 'projectId = :projectId AND #state = :state',
+      keyConditionExpression: 'projectId = :projectId',
+      filterExpression: '#state = :state',
       expressionAttributeNames: { '#state': 'state' },
       expressionAttributeValues: {
         ':projectId': projectId,
@@ -63,8 +64,8 @@ export async function roomStatusHandler(event) {
     });
 
     const committedTasks = await db.query(TABLES.TASKS, {
-      indexName: 'StateIndex',
-      keyConditionExpression: 'projectId = :projectId AND #state = :state',
+      keyConditionExpression: 'projectId = :projectId',
+      filterExpression: '#state = :state',
       expressionAttributeNames: { '#state': 'state' },
       expressionAttributeValues: {
         ':projectId': projectId,
@@ -73,8 +74,8 @@ export async function roomStatusHandler(event) {
     });
 
     const failedTasks = await db.query(TABLES.TASKS, {
-      indexName: 'StateIndex',
-      keyConditionExpression: 'projectId = :projectId AND #state = :state',
+      keyConditionExpression: 'projectId = :projectId',
+      filterExpression: '#state = :state',
       expressionAttributeNames: { '#state': 'state' },
       expressionAttributeValues: {
         ':projectId': projectId,
@@ -133,4 +134,5 @@ export async function roomStatusHandler(event) {
   }
 }
 
+export const roomStatusHandler = withCors(roomStatusHandlerImpl);
 export default roomStatusHandler;

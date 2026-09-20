@@ -8,6 +8,7 @@ import { TABLES } from '../../schema.mjs';
 import broadcast, { events } from '../../lib/broadcast.mjs';
 import fs from 'fs/promises';
 import path from 'path';
+import { withCors } from '../../lib/cors.mjs';
 
 async function fetchDeviceArtifacts(deviceId, taskIds) {
   // In production: use gRPC or secure HTTP to pull from device
@@ -74,7 +75,7 @@ async function verifyIntegration(masterDir) {
   };
 }
 
-export async function codeCollectHandler(event) {
+async function codeCollectHandlerImpl(event) {
   const { projectId, roomId } = event.pathParameters;
   const now = Date.now();
 
@@ -90,8 +91,8 @@ export async function codeCollectHandler(event) {
 
     // Get all completed tasks in room
     const completedTasks = await db.query(TABLES.TASKS, {
-      indexName: 'StateIndex',
-      keyConditionExpression: 'projectId = :projectId AND #state = :state',
+      keyConditionExpression: 'projectId = :projectId',
+      filterExpression: '#state = :state',
       expressionAttributeNames: {
         '#state': 'state'
       },
@@ -165,4 +166,5 @@ export async function codeCollectHandler(event) {
   }
 }
 
+export const codeCollectHandler = withCors(codeCollectHandlerImpl);
 export default codeCollectHandler;

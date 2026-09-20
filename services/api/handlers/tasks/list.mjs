@@ -30,6 +30,7 @@ export async function listTasksHandler(event) {
       leaseExpiry: t.leaseExpiry || null,
       attempts: t.attempts || 0,
       objective: t.contract?.objective || null,
+      ownerAgent: t.contract?.ownerAgent || null,
       budget: t.contract?.budget || null,
       resultDeviceId: t.resultDeviceId || null,
     }));

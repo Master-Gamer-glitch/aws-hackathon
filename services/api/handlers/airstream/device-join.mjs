@@ -6,8 +6,9 @@
 import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
 import broadcast, { events } from '../../lib/broadcast.mjs';
-import { os, v8 } from 'node:os';
+import os from 'node:os';
 import { execSync } from 'node:child_process';
+import { withCors } from '../../lib/cors.mjs';
 
 function detectCapabilities() {
   const cpus = os.cpus();
@@ -86,7 +87,7 @@ function calculateTaskFit(capabilities, taskContract) {
   return score; // 0-1
 }
 
-export async function deviceJoinHandler(event) {
+async function deviceJoinHandlerImpl(event) {
   const { projectId, roomId } = event.pathParameters;
   const { deviceId, deviceName } = JSON.parse(event.body);
 
@@ -152,4 +153,5 @@ export async function deviceJoinHandler(event) {
   }
 }
 
+export const deviceJoinHandler = withCors(deviceJoinHandlerImpl);
 export default deviceJoinHandler;

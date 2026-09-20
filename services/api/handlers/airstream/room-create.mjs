@@ -4,8 +4,9 @@
 
 import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
+import { withCors } from '../../lib/cors.mjs';
 
-export async function createRoomHandler(event) {
+async function createRoomHandlerImpl(event) {
   const { projectId } = event.pathParameters;
   const { deviceId, deviceName } = JSON.parse(event.body);
 
@@ -55,4 +56,5 @@ export async function createRoomHandler(event) {
   }
 }
 
+export const createRoomHandler = withCors(createRoomHandlerImpl);
 export default createRoomHandler;

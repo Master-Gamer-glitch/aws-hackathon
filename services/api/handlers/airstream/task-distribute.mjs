@@ -6,6 +6,7 @@
 import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
 import broadcast, { events } from '../../lib/broadcast.mjs';
+import { withCors } from '../../lib/cors.mjs';
 
 function calculateTaskFitScore(device, task) {
   if (!device.capabilities || device.status !== 'online') return -1;
@@ -93,8 +94,8 @@ async function distributeTasksInRoom(roomId) {
     const projectId = room.projectId;
 
     const readyTasks = await db.query(TABLES.TASKS, {
-      indexName: 'StateIndex',
-      keyConditionExpression: 'projectId = :projectId AND #state = :state',
+      keyConditionExpression: 'projectId = :projectId',
+      filterExpression: '#state = :state',
       expressionAttributeNames: {
         '#state': 'state'
       },
@@ -151,7 +152,7 @@ async function distributeTasksInRoom(roomId) {
   }
 }
 
-export async function taskDistributeHandler(event) {
+async function taskDistributeHandlerImpl(event) {
   const { projectId, roomId } = event.pathParameters;
 
   try {
@@ -176,4 +177,5 @@ export async function taskDistributeHandler(event) {
 }
 
 export { distributeTasksInRoom };
+export const taskDistributeHandler = withCors(taskDistributeHandlerImpl);
 export default taskDistributeHandler;

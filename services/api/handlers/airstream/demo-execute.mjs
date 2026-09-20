@@ -9,6 +9,7 @@ import broadcast, { events } from '../../lib/broadcast.mjs';
 import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
+import { withCors } from '../../lib/cors.mjs';
 
 async function detectProjectType(projectDir) {
   // Check for project markers
@@ -119,7 +120,7 @@ function executeProject(cmd, args, options) {
   });
 }
 
-export async function demoExecuteHandler(event) {
+async function demoExecuteHandlerImpl(event) {
   const { projectId, roomId } = event.pathParameters;
   const now = Date.now();
 
@@ -134,6 +135,20 @@ export async function demoExecuteHandler(event) {
     }
 
     const projectDir = room.masterDir;
+
+    // Collect wrote masterDir under /tmp of whichever Lambda instance served that request.
+    // /tmp is per-instance, so this request may land on an instance that never saw the
+    // files. Say so plainly instead of failing with a raw ENOENT.
+    try {
+      await fs.access(projectDir);
+    } catch {
+      return {
+        statusCode: 409,
+        body: JSON.stringify({
+          error: 'Collected project is not available on this worker (Lambda /tmp is not shared between invocations). Collect artifacts into shared storage such as S3 before running the demo.'
+        })
+      };
+    }
 
     // Detect project type
     const projectType = await detectProjectType(projectDir);
@@ -202,4 +217,5 @@ export async function demoExecuteHandler(event) {
   }
 }
 
+export const demoExecuteHandler = withCors(demoExecuteHandlerImpl);
 export default demoExecuteHandler;
