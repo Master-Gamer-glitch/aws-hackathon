@@ -5,6 +5,8 @@
 //
 //   AWS_PROFILE=crewdesk node services/api/scripts/e2e-airstream.mjs
 //   ... --extended   also runs slow scenarios: long-running server, npm install, Python, env isolation
+//   ... --worker     also runs the real device worker (mock executor) through plan -> run -> collect -> demo
+//   ... --worker --executor=claude   same, with the Claude CLI as the model (slow, costs a few cents)
 //
 // Env: API_URL, WS_URL (default: the crewdesk dev stack), AWS_REGION (default us-west-2).
 // AWS credentials are needed only to seed tasks (there is no "create task" endpoint that skips
@@ -12,6 +14,7 @@
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { spawn } from 'node:child_process';
 import { S3Client, ListObjectsV2Command, DeleteObjectsCommand, GetObjectCommand, ListBucketsCommand } from '@aws-sdk/client-s3';
 
 const REGION = process.env.AWS_REGION || 'us-west-2';
@@ -68,6 +71,8 @@ const PROJECT_FILES = {
 
 const created = { rooms: [], devices: [], tasks: [], projects: [PROJECT] };
 const EXTENDED = process.argv.includes('--extended');
+const WORKER_PATH = new URL('../../../worker/device-worker.mjs', import.meta.url).pathname;
+const sweep = { projects: [], roomDevices: [] }; // rows found by query at cleanup time
 const events = [];
 let socket;
 
@@ -219,6 +224,82 @@ try {
     check('unsupported runtime (Go) is a clear 400', lang.demo.status === 400 && /cannot run/.test(lang.demo.json?.error || ''), lang.demo.json?.error);
   }
 
+  // ── device worker: plan -> a real worker process does the tasks -> collect -> demo ──
+  if (process.argv.includes('--worker')) {
+    const executor = (process.argv.find((a) => a.startsWith('--executor=')) || '--executor=mock').split('=')[1];
+    const WP = `${PROJECT}_worker`;
+    created.projects.push(WP); sweep.projects.push(WP);
+    const worker = (args) => new Promise((resolve) => {
+      let out = '';
+      const c = spawn('node', [WORKER_PATH, ...args, '--project', WP, '--api', API], { env: process.env });
+      c.stdout.on('data', (d) => { out += d; process.stdout.write(`      | ${d}`.replace(/\n(?!$)/g, '\n      | ')); });
+      c.stderr.on('data', (d) => { out += d; });
+      c.on('close', (code) => resolve({ code, out }));
+    });
+    const wcall = (m, path, body) => call(m, `/projects/${WP}${path}`, body);
+    const waitFor = async (fn, ms, every = 1500) => { const end = Date.now() + ms; while (Date.now() < end) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, every)); } return null; };
+
+    const wevents = [];
+    const ws2 = new WebSocket(`${WS}?projectId=${WP}`);
+    ws2.onmessage = (m) => { try { wevents.push(JSON.parse(m.data)); } catch { /* ignore */ } };
+    await new Promise((res) => { ws2.onopen = res; setTimeout(res, 8000); });
+
+    const wm = `w_master_${RUN}`;
+    const wr = await wcall('POST', '/rooms', { deviceId: wm, deviceName: 'Worker Master' });
+    const wroom = wr.json.roomId; created.rooms.push(wroom); created.devices.push(wm); sweep.roomDevices.push(wroom);
+
+    // plan validation
+    const okTask = (files) => ({ objective: 'o', expectedOutput: 'e', successCriteria: ['c'], files });
+    const p400 = async (label, body) => { const r = await wcall('POST', `/rooms/${wroom}/plan`, body); check(`plan rejects ${label} (400)`, r.status === 400, `status ${r.status}: ${r.json?.error}`); };
+    await p400('an empty task list', { outcome: 'x', tasks: [] });
+    await p400('a missing outcome', { tasks: [okTask(['a.js'])] });
+    await p400('a file owned by two tasks', { outcome: 'x', tasks: [okTask(['a.js']), okTask(['a.js'])] });
+    await p400('a path that escapes the project', { outcome: 'x', tasks: [okTask(['../evil.js'])] });
+    await p400('a task with no success criteria', { outcome: 'x', tasks: [{ objective: 'o', expectedOutput: 'e', successCriteria: [] }] });
+    const p404 = await wcall('POST', `/rooms/room_nope/plan`, { outcome: 'x', tasks: [okTask(['a.js'])] });
+    check('plan on a missing room is 404', p404.status === 404, `status ${p404.status}`);
+
+    // re-planning supersedes the earlier plan: only the latest plan's tasks count
+    const first = await wcall('POST', `/rooms/${wroom}/plan`, { outcome: 'first idea', tasks: [okTask(['old1.js']), okTask(['old2.js'])] });
+    check('first plan is accepted', first.status === 200 && first.json?.tasks?.length === 2, `status ${first.status}`);
+    const outcome = executor === 'mock' ? 'Build a tiny greeting project'
+      : (process.env.E2E_OUTCOME || 'A Node.js command line program that prints a multiplication table for 1 to 5 under a title banner. Split it into a table generator module, a text formatter module, and the entry point.');
+    const planned = await worker(['plan', outcome, '--room', wroom, '--executor', executor]);
+    check('worker "plan" creates tasks', planned.code === 0 && /plan_/.test(planned.out), `exit ${planned.code}`);
+    const st0 = await wcall('GET', `/rooms/${wroom}`);
+    const planTotal = st0.json?.taskStats?.total;
+    const newCount = parseInt((planned.out.match(/Planned (\d+) task/) || [])[1], 10);
+    check('re-plan supersedes the old plan (old 2 tasks are ignored)', newCount >= 2 && planTotal === newCount && st0.json?.taskStats?.ready === newCount, `new plan ${newCount}, room counts ${planTotal}`);
+
+    // a real worker joins and waits for work
+    const wproc = worker(['run', '--room', wroom, '--executor', executor, '--max-tasks', String(planTotal), '--idle-exit', executor === 'mock' ? '25' : '300', '--name', 'e2e-worker']);
+    const joined = await waitFor(async () => {
+      const st = await wcall('GET', `/rooms/${wroom}`);
+      return st.json?.deviceStats?.devices?.find((d) => d.name === 'e2e-worker');
+    }, 40000);
+    check('worker joins and reports its own capabilities', !!joined && joined.capabilities?.reportedByDevice === true && joined.capabilities.tools.includes('node'), JSON.stringify(joined?.capabilities?.tools));
+
+    // the master distributes; the worker picks its tasks up
+    const wd = await wcall('POST', `/rooms/${wroom}/distribute`, {});
+    check('distribute leases the planned tasks to the worker', wd.status === 200 && wd.json?.tasksDistributed === planTotal, JSON.stringify(wd.json));
+
+    const wres = await Promise.race([wproc, new Promise((r) => setTimeout(() => r({ code: 'timeout', out: '' }), executor === 'mock' ? 120000 : 900000))]);
+    const wst = await wcall('GET', `/rooms/${wroom}`);
+    check('worker finished every task and all are committed', wst.json?.taskStats?.committed === planTotal && wst.json?.taskStats?.total === planTotal, JSON.stringify(wst.json?.taskStats) + ` worker exit ${wres.code}`);
+
+    const wcol = await wcall('POST', `/rooms/${wroom}/collect`, {});
+    check('collect merges the worker\'s files', wcol.status === 200 && wcol.json?.filesIntegrated >= 3 && wcol.json?.verifyStatus === 'passed', JSON.stringify({ files: wcol.json?.filesIntegrated, verify: wcol.json?.verifyStatus, conflicts: wcol.json?.conflicts, err: wcol.json?.error }));
+    const wdemo = await wcall('POST', `/rooms/${wroom}/demo`, {});
+    console.log(`      | demo output: ${JSON.stringify((wdemo.json?.output || wdemo.json?.error || '').trim())}`);
+    check('demo runs the project the worker built', wdemo.status === 200 && wdemo.json?.success === true, JSON.stringify({ status: wdemo.status, exit: wdemo.json?.exitCode, err: wdemo.json?.error }));
+    if (executor === 'mock') check('demo output is the mock project\'s', /MOCK-PROJECT: HELLO, AIRSTREAM/.test(wdemo.json?.output || ''));
+
+    await new Promise((r) => setTimeout(r, 2000));
+    const wtypes = new Set(wevents.map((e) => e.type));
+    for (const t of ['plan.created', 'device.joined', 'tasks.distributed', 'code.collected', 'demo.completed']) check(`worker run: live event ${t}`, wtypes.has(t));
+    try { ws2.close(); } catch { /* ignore */ }
+  }
+
   // events (give the last broadcasts a moment)
   await new Promise((r) => setTimeout(r, 2500));
   const types = new Set(events.map((e) => e.type));
@@ -233,6 +314,14 @@ try {
   try { socket?.close(); } catch { /* ignore */ }
   // cleanup: rows, then S3
   try {
+    for (const p of sweep.projects) {
+      const { Items } = await ddb.send(new QueryCommand({ TableName: 'crewdesk-tasks', KeyConditionExpression: 'projectId = :p', ExpressionAttributeValues: { ':p': p } }));
+      for (const it of Items || []) await ddb.send(new DeleteCommand({ TableName: 'crewdesk-tasks', Key: { projectId: it.projectId, sk: it.sk } }));
+    }
+    for (const r of sweep.roomDevices) {
+      const { Items } = await ddb.send(new QueryCommand({ TableName: 'crewdesk-devices', IndexName: 'RoomIndex', KeyConditionExpression: 'roomId = :r', ExpressionAttributeValues: { ':r': r } }));
+      for (const it of Items || []) await ddb.send(new DeleteCommand({ TableName: 'crewdesk-devices', Key: { deviceId: it.deviceId } }));
+    }
     for (const k of created.tasks) await ddb.send(new DeleteCommand({ TableName: 'crewdesk-tasks', Key: k }));
     for (const id of created.devices) await ddb.send(new DeleteCommand({ TableName: 'crewdesk-devices', Key: { deviceId: id } }));
     for (const id of created.rooms.filter(Boolean)) await ddb.send(new DeleteCommand({ TableName: 'crewdesk-rooms', Key: { roomId: id } }));

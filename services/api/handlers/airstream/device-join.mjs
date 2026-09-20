@@ -9,6 +9,7 @@ import broadcast, { events } from '../../lib/broadcast.mjs';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { withCors } from '../../lib/cors.mjs';
+import { sanitizeCapabilities } from '../../lib/capabilities.mjs';
 
 function detectCapabilities() {
   const cpus = os.cpus();
@@ -89,7 +90,7 @@ function calculateTaskFit(capabilities, taskContract) {
 
 async function deviceJoinHandlerImpl(event) {
   const { projectId, roomId } = event.pathParameters;
-  const { deviceId, deviceName } = JSON.parse(event.body);
+  const { deviceId, deviceName, capabilities: reported } = JSON.parse(event.body);
 
   const now = Date.now();
 
@@ -103,8 +104,9 @@ async function deviceJoinHandlerImpl(event) {
       };
     }
 
-    // Detect device capabilities
-    const capabilities = detectCapabilities();
+    // A real device reports its own hardware and tools. A browser (which cannot) sends none, and
+    // then all we can offer is what this Lambda measures about itself.
+    const capabilities = sanitizeCapabilities(reported) || detectCapabilities();
 
     // Register device
     await db.putItem(TABLES.DEVICES, {

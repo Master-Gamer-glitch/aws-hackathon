@@ -33,12 +33,19 @@ export async function listTasksHandler(event) {
       ownerAgent: t.contract?.ownerAgent || null,
       budget: t.contract?.budget || null,
       resultDeviceId: t.resultDeviceId || null,
+      roomId: t.roomId || null,
+      planId: t.planId || null,
+      createdAt: t.createdAt || null,
+      contract: t.contract || null,
     }));
+
+    // the outcome the tasks belong to, stated once (every planned task carries the same text)
+    const outcome = (tasks || []).find((t) => t.outcome)?.outcome || null;
 
     return {
       statusCode: 200,
       headers: { 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ projectId, count: summary.length, tasks: summary }),
+      body: JSON.stringify({ projectId, count: summary.length, outcome, tasks: summary }),
     };
   } catch (err) {
     console.error('List error:', err);

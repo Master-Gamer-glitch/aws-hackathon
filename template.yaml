@@ -598,6 +598,38 @@ Resources:
             Path: /projects/{projectId}/rooms/{roomId}
             Method: get
 
+  PlanFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: crewdesk-plan
+      CodeUri: services/api/
+      Handler: handlers/tasks/plan.planHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConnectionsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/POST/@connections/*'
+      Environment:
+        Variables:
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          TASKS_TABLE: !Ref TasksTable
+          ROOMS_TABLE: !Ref RoomsTable
+          DYNAMODB_ENDPOINT: !If [IsLocal, 'http://localhost:4566', '']
+      Events:
+        Plan:
+          Type: Api
+          Properties:
+            Path: /projects/{projectId}/rooms/{roomId}/plan
+            Method: post
+
   WebSocketConnectFunction:
     Type: AWS::Serverless::Function
     Properties:

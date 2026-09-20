@@ -7,6 +7,7 @@ import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
 import broadcast, { events } from '../../lib/broadcast.mjs';
 import { withCors } from '../../lib/cors.mjs';
+import { tasksForRoom } from '../../lib/contracts.mjs';
 
 function calculateTaskFitScore(device, task) {
   if (!device.capabilities || device.status !== 'online') return -1;
@@ -91,9 +92,14 @@ async function distributeTasksInRoom(roomId) {
 
     // Get all ready tasks in projects using this room
     const room = await db.getItem(TABLES.ROOMS, { roomId });
+    if (!room) {
+      const e = new Error('Room not found');
+      e.statusCode = 404;
+      throw e;
+    }
     const projectId = room.projectId;
 
-    const readyTasks = await db.query(TABLES.TASKS, {
+    const readyTasks = tasksForRoom(await db.query(TABLES.TASKS, {
       keyConditionExpression: 'projectId = :projectId',
       filterExpression: '#state = :state',
       expressionAttributeNames: {
@@ -103,7 +109,7 @@ async function distributeTasksInRoom(roomId) {
         ':projectId': projectId,
         ':state': 'ready'
       }
-    });
+    }), room);
 
     let distributed = 0;
     let failed = 0;
@@ -170,7 +176,7 @@ async function taskDistributeHandlerImpl(event) {
   } catch (err) {
     console.error('Distribute handler error:', err);
     return {
-      statusCode: 500,
+      statusCode: err.statusCode || 500,
       body: JSON.stringify({ error: err.message })
     };
   }

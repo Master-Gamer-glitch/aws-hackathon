@@ -5,6 +5,7 @@
 import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
 import { withCors } from '../../lib/cors.mjs';
+import { tasksForRoom } from '../../lib/contracts.mjs';
 
 async function roomStatusHandlerImpl(event) {
   const { projectId, roomId } = event.pathParameters;
@@ -42,56 +43,25 @@ async function roomStatusHandlerImpl(event) {
       }))
     };
 
-    // Get task stats
-    const readyTasks = await db.query(TABLES.TASKS, {
+    // Tasks this room works on: its current plan, plus project-level tasks with no room
+    const allTasks = tasksForRoom(await db.query(TABLES.TASKS, {
       keyConditionExpression: 'projectId = :projectId',
-      filterExpression: '#state = :state',
-      expressionAttributeNames: { '#state': 'state' },
-      expressionAttributeValues: {
-        ':projectId': projectId,
-        ':state': 'ready'
-      }
-    });
+      expressionAttributeValues: { ':projectId': projectId }
+    }), room);
+    const inState = (...states) => allTasks.filter((t) => states.includes(t.state));
+    const readyTasks = inState('ready');
+    const leasedTasks = inState('leased', 'submitted', 'verifying'); // in a device's hands
+    const committedTasks = inState('committed');
+    const failedTasks = inState('failed');
 
-    const leasedTasks = await db.query(TABLES.TASKS, {
-      keyConditionExpression: 'projectId = :projectId',
-      filterExpression: '#state = :state',
-      expressionAttributeNames: { '#state': 'state' },
-      expressionAttributeValues: {
-        ':projectId': projectId,
-        ':state': 'leased'
-      }
-    });
-
-    const committedTasks = await db.query(TABLES.TASKS, {
-      keyConditionExpression: 'projectId = :projectId',
-      filterExpression: '#state = :state',
-      expressionAttributeNames: { '#state': 'state' },
-      expressionAttributeValues: {
-        ':projectId': projectId,
-        ':state': 'committed'
-      }
-    });
-
-    const failedTasks = await db.query(TABLES.TASKS, {
-      keyConditionExpression: 'projectId = :projectId',
-      filterExpression: '#state = :state',
-      expressionAttributeNames: { '#state': 'state' },
-      expressionAttributeValues: {
-        ':projectId': projectId,
-        ':state': 'failed'
-      }
-    });
-
+    const total = readyTasks.length + leasedTasks.length + committedTasks.length + failedTasks.length;
     const taskStats = {
       ready: readyTasks.length,
       leased: leasedTasks.length,
       committed: committedTasks.length,
       failed: failedTasks.length,
-      total: readyTasks.length + leasedTasks.length + committedTasks.length + failedTasks.length,
-      progress: committedTasks.length > 0
-        ? ((committedTasks.length / (readyTasks.length + leasedTasks.length + committedTasks.length + failedTasks.length)) * 100).toFixed(1)
-        : 0
+      total,
+      progress: committedTasks.length > 0 ? ((committedTasks.length / total) * 100).toFixed(1) : 0
     };
 
     // Lease distribution
@@ -122,7 +92,9 @@ async function roomStatusHandlerImpl(event) {
         leaseDistribution: leaseByDevice,
         timeline: timelineData,
         demoStatus: room.demoResult || null,
-        masterDir: room.masterDir || null
+        masterDir: room.masterDir || null,
+        planId: room.planId || null,
+        outcome: room.outcome || null
       })
     };
   } catch (err) {

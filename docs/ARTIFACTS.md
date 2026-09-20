@@ -4,6 +4,7 @@ How code moves from devices to a running demo. Everything shared between Lambda 
 stack's S3 bucket (`ArtifactsBucketName` output), because Lambda `/tmp` is per-instance.
 
 ```
+master ──plan────▶ tasks in DynamoDB, tagged with the room
 device ──submit──▶ projects/{projectId}/tasks/{taskId}/{path}        (one folder per task)
 master ──collect─▶ rooms/{roomId}/integrated/{path}                  (merged project)
                    rooms/{roomId}/integration-report.json            (files, per-device counts, conflicts)
@@ -11,6 +12,30 @@ master ──demo────▶ downloads integrated/ to /tmp, runs it, returns
 ```
 
 Objects expire after 7 days.
+
+## Plan: `POST /projects/{projectId}/rooms/{roomId}/plan`
+
+Creates the room's tasks from contracts you supply, so no model has to run in AWS (the Bedrock-based `/outcomes`
+lead agent needs model access the account does not have). The worker's `plan` command calls this.
+
+```json
+{ "outcome": "what the project should do",
+  "tasks": [ { "objective": "…", "expectedOutput": "…", "successCriteria": ["…"],
+               "files": ["src/table.js"], "notes": "interfaces others rely on" } ] }
+```
+
+- Required per task: `objective`, `expectedOutput`, non-empty `successCriteria`. Optional: `files`, `notes`,
+  `allowedActions`, `budget.usd` (0 to 5), `ownerAgent`, `requiredTools`. 1 to 12 tasks.
+- `files` are the paths a task **owns**. Two tasks owning the same path is a `400`, and so is a path that escapes the project.
+- Planning again supersedes the room's earlier plan. Old tasks are ignored (not deleted), so they never leak into the new run.
+  Tasks with no `roomId` (made by the lead agent) still count for every room.
+- Distribute, collect and room status only look at the room's current plan.
+
+## Devices report their own capabilities
+
+`POST …/rooms/{roomId}/devices` accepts `capabilities` (`platform`, `arch`, `cpuCount`, `memTotalGb`, `memFreeGb`,
+`benchScore`, `tools[]`). A real device sends its own; a browser sends none and gets what the Lambda measures about itself,
+which describes the Lambda, not the browser.
 
 ## Submit: `POST /tasks/{projectId}%23TASK%23{taskId}/submit`
 
@@ -70,6 +95,8 @@ Every function that broadcasts (`device.joined`, `task.assigned`, `tasks.distrib
 ```bash
 AWS_PROFILE=crewdesk node services/api/scripts/e2e-airstream.mjs              # main pipeline + validation + events
 AWS_PROFILE=crewdesk node services/api/scripts/e2e-airstream.mjs --extended   # + server, npm install, Python, isolation
+AWS_PROFILE=crewdesk node services/api/scripts/e2e-airstream.mjs --worker     # + plan validation, a real worker (mock model)
+AWS_PROFILE=crewdesk node services/api/scripts/e2e-airstream.mjs --worker --executor=claude   # same with Claude (~15 cents)
 ```
 
 Runs against the deployed stack and removes everything it creates.

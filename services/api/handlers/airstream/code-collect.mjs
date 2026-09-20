@@ -15,6 +15,7 @@ import { db } from '../../lib/dynamodb.mjs';
 import { TABLES } from '../../schema.mjs';
 import broadcast, { events } from '../../lib/broadcast.mjs';
 import { withCors } from '../../lib/cors.mjs';
+import { tasksForRoom } from '../../lib/contracts.mjs';
 import {
   bucket, taskPrefix, integratedPrefix, reportKey,
   listObjects, getObject, putObject, deletePrefix, mapLimit,
@@ -49,12 +50,12 @@ async function codeCollectHandlerImpl(event) {
     return { statusCode: 404, body: JSON.stringify({ error: 'Room not found' }) };
   }
 
-  const committed = await db.query(TABLES.TASKS, {
+  const committed = tasksForRoom(await db.query(TABLES.TASKS, {
     keyConditionExpression: 'projectId = :projectId',
     filterExpression: '#state = :state',
     expressionAttributeNames: { '#state': 'state' },
     expressionAttributeValues: { ':projectId': projectId, ':state': 'committed' },
-  });
+  }), room);
   committed.sort((a, b) => (a.committedAt || a.submittedAt || 0) - (b.committedAt || b.submittedAt || 0));
 
   const deviceIds = new Set(committed.map((t) => t.resultDeviceId).filter(Boolean));

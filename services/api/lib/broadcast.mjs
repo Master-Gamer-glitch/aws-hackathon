@@ -81,6 +81,12 @@ export const events = {
     message: `📋 Task: "${objective.substring(0, 40)}${objective.length > 40 ? '...' : ''}" → ${deviceName} (fit: ${fitScore.toFixed(2)})`
   }),
 
+  planCreated: (projectId, count, outcome) => ({
+    type: 'plan.created',
+    projectId,
+    message: `🗺️ Plan created: ${count} task${count === 1 ? '' : 's'} for "${String(outcome).substring(0, 60)}${String(outcome).length > 60 ? '...' : ''}"`
+  }),
+
   tasksDistributed: (projectId, count, failed) => ({
     type: 'tasks.distributed',
     projectId,
